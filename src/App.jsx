@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { storage } from './db.js'
+import { VERSION, BUILD_DATE } from './version.js'
 
 /* ═══════════ CONSTANTS ═══════════ */
 const EXERCISES = {
@@ -590,7 +591,7 @@ export default function App() {
           </div>
         </div>
         <div style={{display:'flex',gap:5}}>
-          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['history','🗂 HISTORIAL'],['progress','📈 PROGRESO']].map(([v,l])=>(
+          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['progress','📈 PROGRESO'],['history','🗂 HISTORIAL']].map(([v,l])=>(
             <button key={v} onClick={()=>setView(v)} style={{flex:1,padding:'8px 2px',background:view===v?'#ff8c00':'transparent',color:view===v?'#080808':'#555',border:`1.5px solid ${view===v?'#ff8c00':'#222'}`,borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:0.5,cursor:'pointer',fontFamily:'inherit'}}>{l}</button>
           ))}
         </div>
@@ -721,6 +722,10 @@ export default function App() {
               })}
             </div>
           ))}
+          <div style={{marginTop:24,paddingTop:16,borderTop:'1px solid #141414',textAlign:'center'}}>
+            <div style={{fontSize:10,color:'#ff8c00',fontWeight:800,letterSpacing:2}}>⬡ IRON LOG</div>
+            <div style={{fontSize:11,color:'#2a2a2a',marginTop:4}}>v{VERSION} · {BUILD_DATE}</div>
+          </div>
         </div>
       )}
 
