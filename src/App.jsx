@@ -722,9 +722,9 @@ export default function App() {
               })}
             </div>
           ))}
-          <div style={{marginTop:24,paddingTop:16,borderTop:'1px solid #141414',textAlign:'center'}}>
-            <div style={{fontSize:10,color:'#ff8c00',fontWeight:800,letterSpacing:2}}>⬡ IRON LOG</div>
-            <div style={{fontSize:11,color:'#2a2a2a',marginTop:4}}>v{VERSION} · {BUILD_DATE}</div>
+          <div style={{marginTop:24,paddingTop:16,borderTop:'1px solid #222',textAlign:'center'}}>
+            <div style={{fontSize:13,color:'#ff8c00',fontWeight:800,letterSpacing:3}}>⬡ IRON LOG</div>
+            <div style={{fontSize:13,color:'#555',marginTop:6,fontWeight:700,letterSpacing:1}}>v{VERSION} · {BUILD_DATE}</div>
           </div>
         </div>
       )}
