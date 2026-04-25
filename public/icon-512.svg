@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#080808"/>
+  <polygon points="256,48 435,152 435,360 256,464 77,360 77,152" fill="none" stroke="#ff8c00" stroke-width="30" stroke-linejoin="round"/>
+  <text x="256" y="300" font-size="120" font-family="Arial,sans-serif" font-weight="900" fill="#ff8c00" text-anchor="middle">IL</text>
+</svg>

@@ -53,14 +53,14 @@ const calcAllTimeBests = sessions => { const b={}; for(const d of[0,1])for(const
 function calcWeekVolume(all,wk){
   const muscles={},tonelaje={}
   for(const d of[0,1])for(const s of(all[d]||[]).filter(s=>getWeekYear(s.date)===wk)){
-    for(const ex of s.exercises){const mw=MUSCLE_MAP[ex.name]||{};const done=ex.sets.filter(s=>s.load&&s.reps);if(!done.length)continue
+    for(const ex of s.exercises){const mw=MUSCLE_MAP[ex.name]||{};const done=ex.sets.filter(s=>s.load&&s.reps&&s.done);if(!done.length)continue
     tonelaje[ex.name]=(tonelaje[ex.name]||0)+done.reduce((a,s)=>a+(parseFloat(s.load)||0)*(parseInt(s.reps)||0),0)
     for(const[m,w]of Object.entries(mw))muscles[m]=(muscles[m]||0)+done.length*w}
   }return{muscles,tonelaje}
 }
 
 /* ═══════════ STYLES ═══════════ */
-const cI = {flex:1,width:0,background:'transparent',border:'none',color:'#f0ece3',padding:'0',fontSize:16,fontWeight:700,textAlign:'center',outline:'none'}
+const cI = {flex:1,minWidth:0,width:'100%',background:'transparent',border:'none',color:'#f0ece3',padding:'0',fontSize:22,fontWeight:900,textAlign:'center',outline:'none'}
 const mBt = {background:'#161616',color:'#ff8c00',border:'1px solid #202020',borderRadius:3,cursor:'pointer',fontSize:13,fontWeight:900,padding:0,flexShrink:0}
 const pill = (bg,col) => ({background:bg,color:col,border:'none',borderRadius:5,padding:'5px 12px',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:"'Barlow Condensed','Arial Narrow',sans-serif"})
 
@@ -132,27 +132,29 @@ function SetRow({ s, si, onChange, onDelete, onDone, onUndone, exName, allTimeBe
   const canDone = !!(s.load && s.reps)
   return (
     <div style={{background:s.done?'#0a1a0a':'#0d0d0d',border:`1.5px solid ${s.done?'#1e3a1e':isPR?'#4a3800':'#181818'}`,borderRadius:7,marginBottom:6,overflow:'hidden',transition:'background 0.2s'}}>
-      <div style={{display:'grid',gridTemplateColumns:'22px 1fr 1fr 72px',gap:5,padding:'6px 8px',alignItems:'center'}}>
+      <div style={{display:'grid',gridTemplateColumns:'22px 1fr 1fr 72px',gap:6,padding:'6px 8px',alignItems:'center'}}>
         <div style={{width:22,height:22,borderRadius:4,background:s.done?'#1e4a1e':isPR?'#3a2a00':'#181818',color:s.done?'#4caf50':isPR?'#ffd12d':'#555',display:'flex',alignItems:'center',justifyContent:'center',fontSize:s.done?14:11,fontWeight:900}}>
           {s.done?'✓':isPR?'★':si+1}
         </div>
         {/* CARGA */}
-        <div style={{display:'flex',gap:3,alignItems:'center'}}>
-          <button onClick={()=>!s.done&&onChange('load',String(Math.max(0,(parseFloat(s.load)||0)-2.5)))} style={{...mBt,width:26,height:40,opacity:s.done?0.2:1}}>−</button>
-          <div style={{flex:1,textAlign:'center'}}>
-            <div style={{fontSize:7,color:'#383838',letterSpacing:1,fontWeight:700,marginBottom:1}}>CARGA</div>
-            <input type="number" inputMode="decimal" value={s.load} onChange={e=>!s.done&&onChange('load',e.target.value)} placeholder="kg" readOnly={s.done} style={{...cI,color:s.done?'#4caf50':'#ff8c00',fontWeight:900}}/>
+        <div style={{display:'flex',gap:3,alignItems:'center',background:'#131313',border:'1px solid #222',borderRadius:6,padding:'3px 2px'}}>
+          <button onClick={()=>!s.done&&onChange('load',String(Math.max(0,(parseFloat(s.load)||0)-2.5)))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>−</button>
+          <div style={{flex:1,textAlign:'center',minWidth:0}}>
+            <div style={{fontSize:9,color:'#ff8c0099',letterSpacing:1,fontWeight:800,marginBottom:1}}>CARGA</div>
+            <input type="number" inputMode="decimal" value={s.load} onChange={e=>!s.done&&onChange('load',e.target.value)} placeholder="—" readOnly={s.done} style={{...cI,color:s.done?'#4caf50':'#ff8c00'}}/>
+            <div style={{fontSize:8,color:'#ff8c0055',fontWeight:700,marginTop:1}}>kg</div>
           </div>
-          <button onClick={()=>!s.done&&onChange('load',String((parseFloat(s.load)||0)+2.5))} style={{...mBt,width:26,height:40,opacity:s.done?0.2:1}}>+</button>
+          <button onClick={()=>!s.done&&onChange('load',String((parseFloat(s.load)||0)+2.5))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>+</button>
         </div>
         {/* REPS */}
-        <div style={{display:'flex',gap:3,alignItems:'center'}}>
-          <button onClick={()=>!s.done&&onChange('reps',String(Math.max(1,(parseInt(s.reps)||0)-1)))} style={{...mBt,width:26,height:40,opacity:s.done?0.2:1}}>−</button>
-          <div style={{flex:1,textAlign:'center'}}>
-            <div style={{fontSize:7,color:'#383838',letterSpacing:1,fontWeight:700,marginBottom:1}}>REPS</div>
-            <input type="number" inputMode="numeric" value={s.reps} onChange={e=>!s.done&&onChange('reps',e.target.value)} placeholder="—" readOnly={s.done} style={{...cI,color:s.done?'#4caf50':'#f0ece3',fontWeight:900}}/>
+        <div style={{display:'flex',gap:3,alignItems:'center',background:'#131313',border:'1px solid #222',borderRadius:6,padding:'3px 2px'}}>
+          <button onClick={()=>!s.done&&onChange('reps',String(Math.max(1,(parseInt(s.reps)||0)-1)))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>−</button>
+          <div style={{flex:1,textAlign:'center',minWidth:0}}>
+            <div style={{fontSize:9,color:'#888',letterSpacing:1,fontWeight:800,marginBottom:1}}>REPS</div>
+            <input type="number" inputMode="numeric" value={s.reps} onChange={e=>!s.done&&onChange('reps',e.target.value)} placeholder="—" readOnly={s.done} style={{...cI,color:s.done?'#4caf50':'#f0ece3'}}/>
+            <div style={{fontSize:8,color:'#555',fontWeight:700,marginTop:1}}>reps</div>
           </div>
-          <button onClick={()=>!s.done&&onChange('reps',String((parseInt(s.reps)||0)+1))} style={{...mBt,width:26,height:40,opacity:s.done?0.2:1}}>+</button>
+          <button onClick={()=>!s.done&&onChange('reps',String((parseInt(s.reps)||0)+1))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>+</button>
         </div>
         {/* ✓ HECHA */}
         {s.done ? (
@@ -474,7 +476,7 @@ export default function App() {
   const saveMeso = (startDate,totalWeeks) => { const m={startDate,totalWeeks}; setMesocycle(m); setShowMesoSetup(false); storage.set('meso',JSON.stringify(m)) }
   const getMesoWeek = () => {
     if(!mesocycle)return null
-    const week=Math.floor((new Date()-new Date(mesocycle.startDate))/604800000)+1
+    const week=Math.max(1,Math.floor((new Date()-new Date(mesocycle.startDate))/604800000)+1)
     return{week,total:mesocycle.totalWeeks,pct:Math.min(100,Math.round((week/mesocycle.totalWeeks)*100)),deload:week>=mesocycle.totalWeeks}
   }
 
@@ -492,7 +494,7 @@ export default function App() {
     const s=ex.sets[si]
     if(!s.load||!s.reps)return
     const rm=calc1RM(s.load,s.reps)
-    if(rm){const prevBest=allTimeBests[ex.name]||0;if(rm>prevBest){setAllTimeBests(prev=>({...prev,[ex.name]:rm}));setNewPRs(prev=>({...prev,[ex.name]:rm}));setTimeout(()=>setNewPRs(prev=>{const n={...prev};delete n[ex.name];return n;}),4000)}}
+    if(rm){const prevBest=allTimeBests[ex.name]||0;if(rm>=prevBest){setAllTimeBests(prev=>({...prev,[ex.name]:rm}));setNewPRs(prev=>({...prev,[ex.name]:rm}));setTimeout(()=>setNewPRs(prev=>{const n={...prev};delete n[ex.name];return n;}),4000)}}
     if(!sessionStarted){setSessionStarted(true);setSessionElapsed(0)}
     updateEx(ei,e=>{const sets=[...e.sets];sets[si]={...sets[si],done:true};if(si===sets.length-1)sets.push({...EMPTY_SET,load:s.load,rir:s.rir});return{...e,sets}})
     if(autoRest)startRest(restDuration)
@@ -512,6 +514,32 @@ export default function App() {
     const prev=(sessions[activeDay]||[])[0];if(!prev)return
     const nc={...current,[activeDay]:{...current[activeDay],exercises:prev.exercises.map(ex=>({...ex,photo:null,sets:ex.sets.map(s=>({...s,done:false}))}))}}
     setCurrent(nc);persist(sessions,nc)
+  }
+
+  const handleBackup = async () => {
+    const [s,c,m,ar] = await Promise.all([storage.get('sess'),storage.get('curr'),storage.get('meso'),storage.get('autorest')])
+    const data = {version:1,exportedAt:new Date().toISOString(),sess:s?.value,curr:c?.value,meso:m?.value,autorest:ar?.value}
+    const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'})
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href=url; a.download=`iron-log-${new Date().toISOString().split('T')[0]}.json`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleRestore = async e => {
+    const file = e.target.files[0]; if(!file)return
+    if(!window.confirm('¿Restaurar backup? Se sobreescribirán todos los datos actuales.'))return
+    try {
+      const data = JSON.parse(await file.text())
+      if(data.sess){await storage.set('sess',data.sess);const p=JSON.parse(data.sess);setSessions(p);setAllTimeBests(calcAllTimeBests(p))}
+      if(data.curr){await storage.set('curr',data.curr);setCurrent(JSON.parse(data.curr))}
+      if(data.meso){await storage.set('meso',data.meso);setMesocycle(JSON.parse(data.meso))}
+      if(data.autorest!=null){await storage.set('autorest',data.autorest);setAutoRest(JSON.parse(data.autorest))}
+      alert('✓ Backup restaurado')
+    } catch {
+      alert('Error al leer el archivo')
+    }
+    e.target.value=''
   }
 
   if(!loaded) return (
@@ -661,6 +689,13 @@ export default function App() {
 
       {view==='history'&&(
         <div style={{padding:12}}>
+          <div style={{display:'flex',gap:8,marginBottom:14}}>
+            <button onClick={handleBackup} style={{flex:1,padding:'11px 8px',background:'#0e0e0e',color:'#ff8c00',border:'1.5px solid #ff8c00',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>⬇ EXPORTAR BACKUP</button>
+            <label style={{flex:1,padding:'11px 8px',background:'#0e0e0e',color:'#555',border:'1.5px solid #2a2a2a',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1,textAlign:'center'}}>
+              ⬆ RESTAURAR
+              <input type="file" accept=".json,application/json" onChange={handleRestore} style={{display:'none'}}/>
+            </label>
+          </div>
           <div style={{fontSize:11,color:'#3a3a3a',letterSpacing:3,marginBottom:12,fontWeight:700}}>HISTORIAL — {activeDay===0?'DÍA A':'DÍA B'}</div>
           {!(sessions[activeDay]||[]).length?<div style={{textAlign:'center',color:'#222',padding:40}}>Sin sesiones aún</div>:
           (sessions[activeDay]||[]).map((s,si)=>(
@@ -689,7 +724,7 @@ export default function App() {
         </div>
       )}
 
-      {view==='progress'&&<ProgressView sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests}/>}
+      {view==='progress'&&<ProgressView key={activeDay} sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests}/>}
 
       {showMesoSetup&&<MesoSetup current={mesocycle} onSave={saveMeso} onClose={()=>setShowMesoSetup(false)}/>}
     </div>
