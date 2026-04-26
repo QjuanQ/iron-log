@@ -45,12 +45,74 @@ const BODY_REGIONS = {
   'Dorsal':[{x:19,y:22,w:6,h:26},{x:43,y:22,w:6,h:26}],'Romboides':[{x:24,y:20,w:20,h:14}],
 }
 const REST_PRESETS = [60,90,120,180,240]
+const PROGRESSION_DEFAULTS = {
+  'Squats':                          {setsTarget:5,repsMin:5, repsMax:8, loadIncrement:2.5,rirTarget:2},
+  'Deadlift':                        {setsTarget:5,repsMin:4, repsMax:6, loadIncrement:2.5,rirTarget:2},
+  'Press de banca':                  {setsTarget:5,repsMin:6, repsMax:10,loadIncrement:2.5,rirTarget:2},
+  'Press banca inclinado':           {setsTarget:5,repsMin:8, repsMax:12,loadIncrement:2.5,rirTarget:2},
+  'Tracción en barra dorsales':      {setsTarget:5,repsMin:6, repsMax:10,loadIncrement:2.5,rirTarget:2},
+  'Hack squat':                      {setsTarget:5,repsMin:8, repsMax:12,loadIncrement:5.0,rirTarget:2},
+  'Remo dorsales':                   {setsTarget:5,repsMin:8, repsMax:12,loadIncrement:2.5,rirTarget:2},
+  'Elevaciones laterales inclinado': {setsTarget:5,repsMin:12,repsMax:20,loadIncrement:1.0,rirTarget:2},
+  'Pushdown tríceps':                {setsTarget:5,repsMin:10,repsMax:15,loadIncrement:2.5,rirTarget:2},
+  'Curl bíceps':                     {setsTarget:5,repsMin:10,repsMax:15,loadIncrement:2.5,rirTarget:2},
+  'Tríceps dips':                    {setsTarget:4,repsMin:8, repsMax:12,loadIncrement:0,  rirTarget:2},
+  'Hammer curls':                    {setsTarget:5,repsMin:10,repsMax:15,loadIncrement:2.5,rirTarget:2},
+  'Extensión gemelos':               {setsTarget:5,repsMin:12,repsMax:20,loadIncrement:2.5,rirTarget:2},
+  'Crunches':                        {setsTarget:5,repsMin:15,repsMax:25,loadIncrement:0,  rirTarget:2},
+}
+const PROG_DEFAULT = {setsTarget:3,repsMin:8,repsMax:12,loadIncrement:2.5,rirTarget:2}
+const getProgConfig = (name, userConfig) => ({...PROG_DEFAULT,...(PROGRESSION_DEFAULTS[name]||{}),...(userConfig[name]||{})})
 const calc1RM = (load,reps) => { const l=parseFloat(load),r=parseInt(reps); if(!l||!r||r<1)return null; if(r===1)return l; return Math.round(l*(1+r/30)*10)/10 }
 const fmt = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; return h>0?`${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}` }
 const getWeekYear = d => { const dt=new Date(d); dt.setHours(0,0,0,0); dt.setDate(dt.getDate()+3-(dt.getDay()+6)%7); const w1=new Date(dt.getFullYear(),0,4); return `${dt.getFullYear()}-W${String(1+Math.round(((dt-w1)/86400000-3+(w1.getDay()+6)%7)/7)).padStart(2,'0')}` }
 const EMPTY_SET = {load:'',reps:'',rir:'',done:false}
 const defaultSession = d => ({date:new Date().toISOString().split('T')[0],exercises:EXERCISES[d].map(name=>({name,sets:[{...EMPTY_SET}],notes:'',photo:null}))})
 const calcAllTimeBests = sessions => { const b={}; for(const d of[0,1])for(const s of(sessions[d]||[]))for(const ex of s.exercises){const best=Math.max(...ex.sets.map(s=>calc1RM(s.load,s.reps)||0));if(best>0&&(!b[ex.name]||best>b[ex.name]))b[ex.name]=best;} return b }
+function evaluateProgression(exerciseList, userProgConfig) {
+  const results = {}
+  for (const ex of exerciseList) {
+    const cfg = getProgConfig(ex.name, userProgConfig)
+    const done = ex.sets.filter(s => s.done && s.load && s.reps)
+    if (!done.length) continue
+    const anyBelowMin = done.some(s => parseInt(s.reps) < cfg.repsMin)
+    const allAtMax = done.every(s => parseInt(s.reps) >= cfg.repsMax)
+    const allRirOk = done.every(s => { if(!s.rir) return true; const v=s.rir==='4+'?4:parseInt(s.rir); return v>=cfg.rirTarget })
+    const enoughSets = done.length >= cfg.setsTarget
+    const lastLoad = parseFloat(done[done.length-1]?.load) || 0
+    let status = 'maintain', suggestedLoad = lastLoad
+    if (anyBelowMin) { status = 'down' }
+    else if (enoughSets && allAtMax && allRirOk) { status = 'up'; if(cfg.loadIncrement>0) suggestedLoad = Math.round((lastLoad+cfg.loadIncrement)*100)/100 }
+    results[ex.name] = {status, suggestedLoad, evaluatedAt: new Date().toISOString()}
+  }
+  return results
+}
+function detectStagnation(sessions, dayIdx, exerciseName) {
+  const daySess = (sessions[dayIdx]||[]).slice(0,3)
+  if (daySess.length < 3) return {stagnant:false, trend:0}
+  const rms = daySess.map(s => { const ex=s.exercises.find(e=>e.name===exerciseName); if(!ex)return 0; return Math.max(...ex.sets.map(set=>calc1RM(set.load,set.reps)||0)) })
+  if (rms.some(v => !v)) return {stagnant:false, trend:0}
+  const trend = rms[0] - rms[2]
+  return {stagnant: trend <= 0, trend}
+}
+function detectFatigueSignals(sessions, userProgConfig) {
+  const signals = []
+  const all = [...(sessions[0]||[]),...(sessions[1]||[])].sort((a,b)=>new Date(b.savedAt||b.date)-new Date(a.savedAt||a.date))
+  const r2 = all.slice(0,2)
+  if (r2.length === 2) {
+    const rd = []
+    for (const sess of r2) for (const ex of sess.exercises) { const cfg=getProgConfig(ex.name,userProgConfig); for (const s of ex.sets.filter(s=>s.done&&s.rir)) { rd.push({rir:s.rir==='4+'?4:parseInt(s.rir),target:cfg.rirTarget}) } }
+    if (rd.length >= 4) { const avg=rd.reduce((a,v)=>a+v.rir,0)/rd.length; const tgt=rd.reduce((a,v)=>a+v.target,0)/rd.length; if(avg<=1&&tgt>=2) signals.push('RIR promedio ≤ 1 en últimas 2 sesiones') }
+  }
+  if (all.length >= 3) {
+    let drops=0; const cur=all[0],ago2=all[2]
+    for (const ex of cur.exercises) { const prev=ago2.exercises.find(e=>e.name===ex.name); if(!prev)continue; const cRM=Math.max(...ex.sets.map(s=>calc1RM(s.load,s.reps)||0)); const pRM=Math.max(...prev.sets.map(s=>calc1RM(s.load,s.reps)||0)); if(cRM>0&&pRM>0&&cRM<pRM)drops++ }
+    if (drops >= 2) signals.push(`Caída de rendimiento en ${drops} ejercicios`)
+  }
+  const wd = all.filter(s=>s.duration>60)
+  if (wd.length >= 6) { const avg=wd.slice(1,6).reduce((a,s)=>a+s.duration,0)/5; if(wd[0].duration>avg*1.5) signals.push('Sesión más lenta de lo habitual') }
+  return signals
+}
 function calcWeekVolume(all,wk){
   const muscles={},tonelaje={}
   for(const d of[0,1])for(const s of(all[d]||[]).filter(s=>getWeekYear(s.date)===wk)){
@@ -186,13 +248,15 @@ function SetRow({ s, si, onChange, onDelete, onDone, onUndone, exName, allTimeBe
 }
 
 /* ═══════════ EXERCISE CARD ═══════════ */
-function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, prevEx, onRest, restDuration, allTimeBests, showTechnique, onToggleTechnique }) {
+function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, prevEx, onRest, restDuration, allTimeBests, showTechnique, onToggleTechnique, progConfig, progStatus, stagnant, onConfigEdit }) {
   const done = ex.sets.filter(s => s.load && s.reps && s.done)
   const best1RM = ex.sets.length ? Math.max(...ex.sets.map(s => calc1RM(s.load,s.reps)||0)) : 0
   const isNewPR = best1RM > 0 && allTimeBests[ex.name] && best1RM >= allTimeBests[ex.name]
   const leftCol = isNewPR ? '#ffd12d' : done.length > 0 && done.length === ex.sets.filter(s=>s.load&&s.reps).length ? '#4caf50' : done.length > 0 ? '#ff8c00' : '#222'
   const SvgComp = EXERCISE_SVGS[ex.name]
   const primaryMuscles = Object.entries(MUSCLE_MAP[ex.name]||{}).filter(([,w])=>w>=0.7).map(([m])=>m)
+  const cfg = getProgConfig(ex.name, progConfig)
+  const status = progStatus[ex.name]
   const addSet = () => onChange(e => ({...e,sets:[...e.sets,{...EMPTY_SET,load:e.sets[e.sets.length-1]?.load||''}]}))
   const removeSet = i => onChange(e => ({...e,sets:e.sets.filter((_,j)=>j!==i)}))
   const updateSet = (i,f,v) => onChange(e => { const sets=[...e.sets]; sets[i]={...sets[i],[f]:v}; return{...e,sets} })
@@ -207,12 +271,32 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
             {primaryMuscles.join(' · ')}
             {!expanded&&done.length>0&&<span style={{color:'#484848'}}> · {done.length} ✓{best1RM>0?` · 1RM ~${best1RM}kg`:''}</span>}
           </div>
+          {stagnant?.stagnant&&<div style={{fontSize:9,color:'#ffd12d',background:'#2a2000',borderRadius:3,padding:'1px 5px',marginTop:3,display:'inline-block'}}>⚠️ Sin mejora en 3 sesiones</div>}
         </div>
         {!expanded&&done.length>0&&(()=>{const last=ex.sets.filter(s=>s.done).at(-1);return last?<div style={{fontSize:11,color:'#ff8c00',fontWeight:700,flexShrink:0}}>{last.load}kg×{last.reps}</div>:null})()}
         <div style={{color:'#2e2e2e',fontSize:13,flexShrink:0}}>{expanded?'▲':'▼'}</div>
       </div>
       {expanded && (
         <div style={{borderTop:'1px solid #181818',padding:'10px 12px 14px'}}>
+          {/* PROGRESSION INDICATOR */}
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10}}>
+            <div style={{display:'flex',alignItems:'center',gap:6,background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:5,padding:'5px 8px',flex:1}}>
+              <span style={{fontSize:10,color:'#ff8c00',fontWeight:800,letterSpacing:1}}>{cfg.setsTarget}×{cfg.repsMin}-{cfg.repsMax}</span>
+              <span style={{fontSize:9,color:'#383838'}}>· +{cfg.loadIncrement}kg · RIR≥{cfg.rirTarget}</span>
+            </div>
+            <button onClick={e=>{e.stopPropagation();onConfigEdit()}} style={{background:'#1a1a1a',border:'1px solid #2a2a2a',borderRadius:5,padding:'5px 8px',fontSize:13,cursor:'pointer',color:'#555'}}>⚙️</button>
+          </div>
+          {/* STATUS BADGE */}
+          {status&&(
+            <div style={{marginBottom:10,padding:'7px 10px',borderRadius:6,background:status.status==='up'?'#1a3a1a':status.status==='down'?'#2a0a0a':'#1a1a00',border:`1px solid ${status.status==='up'?'#2e5a2e':status.status==='down'?'#4a1a1a':'#3a3000'}`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:11,fontWeight:900,color:status.status==='up'?'#4caf50':status.status==='down'?'#ff6b6b':'#ffd12d',letterSpacing:1}}>
+                  {status.status==='up'?`🟢 +${cfg.loadIncrement}kg SIGUIENTE SESIÓN`:status.status==='down'?'🔴 AJUSTAR CARGA':'🟡 MANTENER CARGA'}
+                </span>
+                {status.status==='up'&&status.suggestedLoad>0&&<span style={{fontSize:11,color:'#4caf50',fontWeight:700}}>{status.suggestedLoad}kg</span>}
+              </div>
+            </div>
+          )}
           <button onClick={onToggleTechnique} style={{width:'100%',padding:'7px',background:showTechnique?'#1a1a1a':'transparent',color:showTechnique?'#ff8c00':'#383838',border:`1px solid ${showTechnique?'#ff8c00':'#222'}`,borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1,marginBottom:10}}>
             {showTechnique?'▲ OCULTAR TÉCNICA':'🎯 VER TÉCNICA Y MÚSCULOS'}
           </button>
@@ -260,6 +344,73 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+/* ═══════════ PROGRESSION SETUP ═══════════ */
+function ProgressionSetup({exerciseName, config, onSave, onClose}) {
+  const [cfg, setCfg] = useState({...config})
+  const upd = (k,v) => setCfg(p=>({...p,[k]:v}))
+  const stepper = (label, key, min, max) => (
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>{label}</div>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <button onClick={()=>upd(key,Math.max(min,cfg[key]-1))} style={{width:38,height:38,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:6,fontSize:20,cursor:'pointer',fontWeight:900}}>−</button>
+        <div style={{flex:1,textAlign:'center',fontSize:24,fontWeight:900,color:'#f0ece3'}}>{cfg[key]}</div>
+        <button onClick={()=>upd(key,Math.min(max,cfg[key]+1))} style={{width:38,height:38,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:6,fontSize:20,cursor:'pointer',fontWeight:900}}>+</button>
+      </div>
+    </div>
+  )
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:400,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
+      <div style={{background:'#111',border:'1px solid #2a2a2a',borderRadius:'16px 16px 0 0',padding:'24px 20px 32px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}}>
+        <div style={{fontSize:12,fontWeight:900,letterSpacing:2,marginBottom:4,color:'#ff8c00'}}>⬡ PROGRESIÓN</div>
+        <div style={{fontSize:15,fontWeight:800,color:'#f0ece3',marginBottom:20}}>{exerciseName}</div>
+        {stepper('SERIES OBJETIVO','setsTarget',1,10)}
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>RANGO DE REPS</div>
+          <div style={{display:'flex',gap:10,alignItems:'center'}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:8,color:'#444',marginBottom:4,textAlign:'center'}}>MÍN</div>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <button onClick={()=>upd('repsMin',Math.max(1,cfg.repsMin-1))} style={{width:32,height:32,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:5,fontSize:18,cursor:'pointer',fontWeight:900}}>−</button>
+                <div style={{flex:1,textAlign:'center',fontSize:20,fontWeight:900,color:'#f0ece3'}}>{cfg.repsMin}</div>
+                <button onClick={()=>upd('repsMin',Math.min(cfg.repsMax-1,cfg.repsMin+1))} style={{width:32,height:32,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:5,fontSize:18,cursor:'pointer',fontWeight:900}}>+</button>
+              </div>
+            </div>
+            <div style={{color:'#333',fontSize:18,fontWeight:900}}>—</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:8,color:'#444',marginBottom:4,textAlign:'center'}}>MÁX</div>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <button onClick={()=>upd('repsMax',Math.max(cfg.repsMin+1,cfg.repsMax-1))} style={{width:32,height:32,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:5,fontSize:18,cursor:'pointer',fontWeight:900}}>−</button>
+                <div style={{flex:1,textAlign:'center',fontSize:20,fontWeight:900,color:'#f0ece3'}}>{cfg.repsMax}</div>
+                <button onClick={()=>upd('repsMax',Math.min(30,cfg.repsMax+1))} style={{width:32,height:32,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:5,fontSize:18,cursor:'pointer',fontWeight:900}}>+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>INCREMENTO DE CARGA (kg)</div>
+          <div style={{display:'flex',gap:6}}>
+            {[0,1.25,2.5,5,10].map(v=>(
+              <button key={v} onClick={()=>upd('loadIncrement',v)} style={{flex:1,padding:'10px 2px',background:cfg.loadIncrement===v?'#ff8c00':'#1a1a1a',color:cfg.loadIncrement===v?'#080808':'#555',border:`1.5px solid ${cfg.loadIncrement===v?'#ff8c00':'#222'}`,borderRadius:6,fontSize:12,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>{v}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{marginBottom:24}}>
+          <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>RIR MÍNIMO PARA SUBIR CARGA</div>
+          <div style={{display:'flex',gap:6}}>
+            {[1,2,3].map(v=>(
+              <button key={v} onClick={()=>upd('rirTarget',v)} style={{flex:1,padding:'12px',background:cfg.rirTarget===v?'#ff8c00':'#1a1a1a',color:cfg.rirTarget===v?'#080808':'#555',border:`1.5px solid ${cfg.rirTarget===v?'#ff8c00':'#222'}`,borderRadius:6,fontSize:16,fontWeight:900,cursor:'pointer',fontFamily:'inherit'}}>{v}</button>
+            ))}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={onClose} style={{flex:1,padding:'14px',background:'transparent',color:'#555',border:'1.5px solid #2a2a2a',borderRadius:8,fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>CANCELAR</button>
+          <button onClick={()=>onSave(cfg)} style={{flex:2,padding:'14px',background:'linear-gradient(135deg,#ff8c00,#e06600)',color:'#080808',border:'none',borderRadius:8,fontSize:14,fontWeight:900,cursor:'pointer',fontFamily:'inherit',letterSpacing:2}}>GUARDAR</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -356,21 +507,29 @@ function VolumeView({ sessions }) {
 }
 
 /* ═══════════ PROGRESS VIEW ═══════════ */
-function ProgressView({ sessions, exercises, allTimeBests }) {
+function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }) {
   const [sel, setSel] = useState(0)
   const allData = [...sessions].reverse().map(s=>({date:s.date,ex:s.exercises[sel]})).filter(d=>d.ex)
   const chartData = allData.map(d=>{const best=Math.max(...d.ex.sets.map(s=>calc1RM(s.load,s.reps)||0));const maxL=Math.max(...d.ex.sets.map(s=>parseFloat(s.load)||0));return{date:d.date,rm1:best,load:maxL};}).filter(d=>d.rm1>0||d.load>0)
   const first=chartData[0], last=chartData[chartData.length-1]
-  const delta = last&&first ? last.rm1-first.rm1 : 0
+  const delta = last&&first ? Math.round((last.rm1-first.rm1)*10)/10 : 0
   const exBest = allTimeBests[exercises[sel]] || 0
+  const recentChart = chartData.slice(-3)
+  const trendKg = recentChart.length >= 2 ? Math.round((recentChart[recentChart.length-1].rm1 - recentChart[0].rm1)*10)/10 : null
+  const trendLabel = trendKg === null ? '—' : trendKg > 0 ? `↗ +${trendKg}kg` : trendKg < 0 ? `↘ ${trendKg}kg` : '→ Estable'
+  const trendColor = trendKg === null ? '#333' : trendKg > 0 ? '#4caf50' : trendKg < 0 ? '#ff4444' : '#ffd12d'
   return (
     <div style={{padding:12}}>
       <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:14}}>
-        {exercises.map((name,i)=>(
-          <button key={i} onClick={()=>setSel(i)} style={{padding:'6px 9px',background:sel===i?'#ff8c00':'#0e0e0e',color:sel===i?'#080808':'#3a3a3a',border:`1px solid ${sel===i?'#ff8c00':'#1a1a1a'}`,borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
-            {name.split(' ').slice(0,2).join(' ')}
-          </button>
-        ))}
+        {exercises.map((name,i)=>{
+          const stag = allSessions ? detectStagnation(allSessions, dayIdx??0, name) : {stagnant:false}
+          return (
+            <button key={i} onClick={()=>setSel(i)} style={{padding:'6px 9px',background:sel===i?'#ff8c00':'#0e0e0e',color:sel===i?'#080808':'#3a3a3a',border:`1px solid ${sel===i?'#ff8c00':'#1a1a1a'}`,borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
+              {name.split(' ').slice(0,2).join(' ')}
+              {stag.stagnant&&<span style={{position:'absolute',top:2,right:2,width:5,height:5,borderRadius:'50%',background:'#ff4444',display:'block'}}/>}
+            </button>
+          )
+        })}
       </div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
         <div style={{fontSize:14,fontWeight:800,borderLeft:'3px solid #ff8c00',paddingLeft:10}}>{exercises[sel]}</div>
@@ -378,8 +537,8 @@ function ProgressView({ sessions, exercises, allTimeBests }) {
       </div>
       {!chartData.length?(<div style={{color:'#222',fontSize:13,textAlign:'center',padding:30}}>Sin datos para este ejercicio</div>):(
         <>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:14}}>
-            {[{label:'INICIO 1RM',value:`${first?.rm1||0}kg`,color:'#444'},{label:'MEJOR 1RM',value:`${exBest||Math.max(...chartData.map(d=>d.rm1))}kg`,color:'#ffd12d'},{label:'PROGRESO',value:`${delta>=0?'+':''}${delta}kg`,color:delta>=0?'#7ed957':'#ff4444'}].map(({label,value,color})=>(
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+            {[{label:'INICIO 1RM',value:`${first?.rm1||0}kg`,color:'#444'},{label:'MEJOR 1RM',value:`${exBest||Math.max(...chartData.map(d=>d.rm1))}kg`,color:'#ffd12d'},{label:'PROGRESO',value:`${delta>=0?'+':''}${delta}kg`,color:delta>=0?'#7ed957':'#ff4444'},{label:'TENDENCIA',value:trendLabel,color:trendColor}].map(({label,value,color})=>(
               <div key={label} style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'10px 6px',textAlign:'center'}}>
                 <div style={{fontSize:8,letterSpacing:2,color:'#2e2e2e',fontWeight:800}}>{label}</div>
                 <div style={{fontSize:20,fontWeight:900,color,marginTop:3}}>{value}</div>
@@ -441,6 +600,12 @@ export default function App() {
   const [mesocycle,setMesocycle] = useState(null)
   const [showMesoSetup,setShowMesoSetup] = useState(false)
   const [showTechnique,setShowTechnique] = useState({})
+  const [progConfig,setProgConfig] = useState({})
+  const [progStatus,setProgStatus] = useState({})
+  const [deloadDismissedWeek,setDeloadDismissedWeek] = useState(null)
+  const [showProgSetup,setShowProgSetup] = useState(false)
+  const [progSetupEx,setProgSetupEx] = useState(null)
+  const [fatigueSignals,setFatigueSignals] = useState([])
   const sessRef=useRef(null), restRef=useRef(null)
 
   useEffect(()=>{const t=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(t);},[])
@@ -457,10 +622,15 @@ export default function App() {
 
   useEffect(()=>{
     (async()=>{
-      const s=await storage.get('sess');if(s){const p=JSON.parse(s.value);setSessions(p);setAllTimeBests(calcAllTimeBests(p));}
+      let parsedSess=null, loadedProgConfig={}
+      const s=await storage.get('sess');if(s){parsedSess=JSON.parse(s.value);setSessions(parsedSess);setAllTimeBests(calcAllTimeBests(parsedSess));}
       const c=await storage.get('curr');if(c)setCurrent(JSON.parse(c.value))
       const m=await storage.get('meso');if(m)setMesocycle(JSON.parse(m.value))
       const ar=await storage.get('autorest');if(ar)setAutoRest(JSON.parse(ar.value))
+      const pc=await storage.get('progression_config');if(pc){loadedProgConfig=JSON.parse(pc.value);setProgConfig(loadedProgConfig)}
+      const ps=await storage.get('progression_status');if(ps)setProgStatus(JSON.parse(ps.value))
+      const ddw=await storage.get('deload_dismissed_week');if(ddw)setDeloadDismissedWeek(JSON.parse(ddw.value))
+      if(parsedSess)setFatigueSignals(detectFatigueSignals(parsedSess,loadedProgConfig))
       setLoaded(true)
     })()
   },[])
@@ -509,6 +679,16 @@ export default function App() {
     const nc={...current,[activeDay]:defaultSession(activeDay)}
     setSessions(ns);setCurrent(nc);setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0)
     setAllTimeBests(calcAllTimeBests(ns));persist(ns,nc);setSaved(true);setTimeout(()=>setSaved(false),2500)
+    const newPS=evaluateProgression(s.exercises,progConfig)
+    const mergedPS={...progStatus,...newPS}
+    setProgStatus(mergedPS);storage.set('progression_status',JSON.stringify(mergedPS))
+    setFatigueSignals(detectFatigueSignals(ns,progConfig))
+  }
+
+  const dismissDeload = () => {
+    if(!mesocycle)return
+    const key=`${getMesoWeek()?.week}-${mesocycle.startDate}`
+    setDeloadDismissedWeek(key);storage.set('deload_dismissed_week',JSON.stringify(key))
   }
 
   const copyLastSession = () => {
@@ -602,12 +782,23 @@ export default function App() {
         {mesoInfo?(<>
           <div style={{fontSize:9,letterSpacing:2,color:'#444',fontWeight:800,flexShrink:0}}>MESOCICLO</div>
           <div style={{flex:1,height:4,background:'#1a1a1a',borderRadius:2}}><div style={{height:4,borderRadius:2,background:'#ff8c00',width:`${mesoInfo.pct}%`,transition:'width 0.5s'}}/></div>
-          <div style={{fontSize:11,fontWeight:800,color:mesoInfo.deload?'#ff8c00':'#f0ece3',flexShrink:0}}>{mesoInfo.deload?'🔄 ':''} SEM {mesoInfo.week}/{mesoInfo.total}</div>
+          <div style={{fontSize:11,fontWeight:800,color:mesoInfo.deload?'#ff8c00':'#f0ece3',flexShrink:0}}>{mesoInfo.deload?'🔄 ':''}{fatigueSignals.length>0?'⚠️ ':''}SEM {mesoInfo.week}/{mesoInfo.total}</div>
           <div style={{fontSize:9,color:'#333'}}>⚙️</div>
         </>):(
           <div style={{fontSize:10,color:'#333',fontWeight:700,letterSpacing:2,width:'100%',textAlign:'center'}}>+ CONFIGURAR MESOCICLO</div>
         )}
       </div>
+
+      {/* DELOAD BANNER */}
+      {mesoInfo?.deload && deloadDismissedWeek !== `${mesoInfo.week}-${mesocycle?.startDate}` && (
+        <div style={{margin:'8px 12px 0',background:'#0d0900',border:'1px solid #ff8c00',borderRadius:6,padding:'10px 12px',display:'flex',alignItems:'center',gap:8}}>
+          <div style={{flex:1}}>
+            <div style={{fontSize:10,fontWeight:900,color:'#ff8c00',letterSpacing:2}}>🔄 SEMANA DE DELOAD</div>
+            <div style={{fontSize:11,color:'#777',marginTop:2}}>Reduce el volumen y la intensidad esta semana</div>
+          </div>
+          <button onClick={dismissDeload} style={{background:'#1a1200',border:'1px solid #3a2800',borderRadius:5,padding:'6px 10px',fontSize:10,color:'#ff8c00',cursor:'pointer',fontFamily:'inherit',fontWeight:800,flexShrink:0,letterSpacing:1}}>Entendido</button>
+        </div>
+      )}
 
       {/* DAY TABS */}
       <div style={{display:'flex',margin:'8px 12px 0',gap:8}}>
@@ -665,6 +856,12 @@ export default function App() {
               <button onClick={copyLastSession} style={{background:'#1a1a1a',border:'1.5px solid #ff8c00',borderRadius:5,padding:'5px 10px',fontSize:10,color:'#ff8c00',cursor:'pointer',fontFamily:'inherit',fontWeight:800,flexShrink:0,letterSpacing:1}}>📋 COPIAR</button>
             </div>
           )}
+          {fatigueSignals.length>0&&(
+            <div style={{background:'#1a0a0a',border:'1px solid #4a1a1a',borderRadius:6,padding:'9px 12px',marginBottom:10}}>
+              <div style={{fontSize:9,letterSpacing:2,color:'#ff4444',fontWeight:800,marginBottom:4}}>⚠️ SEÑALES DE FATIGA</div>
+              {fatigueSignals.map((sig,i)=><div key={i} style={{fontSize:11,color:'#ff6b6b',marginTop:2}}>• {sig}</div>)}
+            </div>
+          )}
           {sess.exercises.map((ex,ei)=>(
             <ExCard key={ei} ex={ex} ei={ei} expanded={expandedEx===ei}
               onToggle={()=>setExpandedEx(expandedEx===ei?null:ei)}
@@ -676,6 +873,10 @@ export default function App() {
               allTimeBests={allTimeBests}
               showTechnique={showTechnique[ei]||false}
               onToggleTechnique={()=>setShowTechnique(p=>({...p,[ei]:!p[ei]}))}
+              progConfig={progConfig}
+              progStatus={progStatus}
+              stagnant={detectStagnation(sessions, activeDay, ex.name)}
+              onConfigEdit={()=>{setProgSetupEx(ex.name);setShowProgSetup(true)}}
             />
           ))}
           {sessionStarted&&(
@@ -729,9 +930,17 @@ export default function App() {
         </div>
       )}
 
-      {view==='progress'&&<ProgressView key={activeDay} sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests}/>}
+      {view==='progress'&&<ProgressView key={activeDay} sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests} allSessions={sessions} dayIdx={activeDay}/>}
 
       {showMesoSetup&&<MesoSetup current={mesocycle} onSave={saveMeso} onClose={()=>setShowMesoSetup(false)}/>}
+      {showProgSetup&&progSetupEx&&(
+        <ProgressionSetup
+          exerciseName={progSetupEx}
+          config={getProgConfig(progSetupEx,progConfig)}
+          onSave={cfg=>{const nc={...progConfig,[progSetupEx]:cfg};setProgConfig(nc);storage.set('progression_config',JSON.stringify(nc));setShowProgSetup(false);setProgSetupEx(null)}}
+          onClose={()=>{setShowProgSetup(false);setProgSetupEx(null)}}
+        />
+      )}
     </div>
   )
 }
