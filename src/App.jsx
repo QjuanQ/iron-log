@@ -719,7 +719,6 @@ export default function App() {
     if(!s.load||!s.reps)return
     const rm=calc1RM(s.load,s.reps)
     if(rm){const prevBest=allTimeBests[ex.name]||0;if(rm>=prevBest){setAllTimeBests(prev=>({...prev,[ex.name]:rm}));setNewPRs(prev=>({...prev,[ex.name]:rm}));setTimeout(()=>setNewPRs(prev=>{const n={...prev};delete n[ex.name];return n;}),4000)}}
-    if(!sessionStarted){setSessionStarted(true);setSessionElapsed(0)}
     updateEx(ei,e=>{const sets=[...e.sets];sets[si]={...sets[si],done:true};if(si===sets.length-1)sets.push({...EMPTY_SET,load:s.load,rir:s.rir});return{...e,sets}})
     if(autoRest)startRest(restDuration)
   }
@@ -819,10 +818,11 @@ export default function App() {
                 <div style={{width:6,height:6,borderRadius:'50%',background:sessionPaused?'#ffaa2d':'#ff4444',animation:sessionPaused?'none':'blink 1s infinite'}}/>
                 <span style={{fontSize:13,fontWeight:800,letterSpacing:1,color:sessionPaused?'#ffaa2d':'#f0ece3'}}>{fmt(sessionElapsed)}</span>
                 <button onClick={()=>setSessionPaused(p=>!p)} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:13,cursor:'pointer',padding:'0 2px'}}>{sessionPaused?'▶':'⏸'}</button>
-                <button onClick={saveSession} style={{background:'transparent',border:'none',color:'#555',fontSize:11,cursor:'pointer',padding:0}}>■</button>
+                <button onClick={saveSession} style={{background:'transparent',border:'none',color:'#4caf50',fontSize:11,cursor:'pointer',padding:'0 2px',fontWeight:900}}>■</button>
+                <button onClick={()=>{if(window.confirm('¿Descartar sesión?')){setCurrent(c=>({...c,[activeDay]:defaultSession(activeDay)}));setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0)}}} style={{background:'transparent',border:'none',color:'#3a3a3a',fontSize:13,cursor:'pointer',padding:'0 2px'}}>✕</button>
               </div>
             ):(
-              <div style={{fontSize:10,color:'#383838',fontWeight:700,letterSpacing:1}}>INICIA AL MARCAR 1ª SERIE</div>
+              <button onClick={()=>{setSessionStarted(true);setSessionElapsed(0)}} style={{background:'#1a0e00',border:'1.5px solid #ff8c00',borderRadius:20,padding:'4px 12px',color:'#ff8c00',fontSize:11,fontWeight:900,cursor:'pointer',letterSpacing:1,fontFamily:'inherit'}}>▶ INICIAR</button>
             )}
           </div>
         </div>
@@ -960,9 +960,10 @@ export default function App() {
             <div key={si} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:12,marginBottom:10}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <div style={{fontSize:13,fontWeight:800,color:'#ff8c00'}}>{new Date(s.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}</div>
-                <div style={{display:'flex',gap:8}}>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
                   {s.duration&&<span style={{fontSize:10,color:'#383838'}}>⏱ {fmt(s.duration)}</span>}
                   <span style={{fontSize:10,color:'#2a2a2a'}}>#{(sessions[activeDay]||[]).length-si}</span>
+                  <button onClick={()=>{if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[activeDay]:sessions[activeDay].filter((_,i)=>i!==si)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#2a2a2a',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
                 </div>
               </div>
               {s.exercises.map((ex,ei)=>{
