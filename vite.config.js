@@ -11,7 +11,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icon-192.svg', 'icon-512.svg'],
+      includeAssets: ['favicon.png', 'icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'Iron Log',
         short_name: 'Iron Log',
@@ -23,15 +23,22 @@ export default defineConfig({
         start_url: `/${REPO_NAME}/`,
         icons: [
           {
-            src: `/${REPO_NAME}/icon-192.svg`,
+            src: `/${REPO_NAME}/icon-192.png`,
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
-            src: `/${REPO_NAME}/icon-512.svg`,
+            src: `/${REPO_NAME}/icon-512.png`,
             sizes: '512x512',
-            type: 'image/svg+xml',
-            purpose: 'any maskable'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: `/${REPO_NAME}/icon-512.png`,
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },
