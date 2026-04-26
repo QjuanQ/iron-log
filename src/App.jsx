@@ -328,7 +328,7 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
           )}
           <div style={{fontSize:8,color:'#2a2a2a',letterSpacing:1,fontWeight:700,marginBottom:6}}>SERIES — rellena carga y reps, luego pulsa ✓</div>
           {ex.sets.map((s,si)=>(
-            <SetRow key={si} s={s} si={si} onChange={(f,v)=>updateSet(si,f,v)} onDelete={()=>removeSet(si)} onDone={()=>onSetDone(si)} onUndone={()=>onSetUndone(si)} exName={ex.name} allTimeBests={allTimeBests}/>
+            <SetRow key={`${si}-${s.load}-${s.reps}-${s.done}`} s={s} si={si} onChange={(f,v)=>updateSet(si,f,v)} onDelete={()=>removeSet(si)} onDone={()=>onSetDone(si)} onUndone={()=>onSetUndone(si)} exName={ex.name} allTimeBests={allTimeBests}/>
           ))}
           <div style={{display:'flex',gap:7,marginTop:8}}>
             <button onClick={addSet} style={{flex:1,padding:'10px',background:'transparent',color:'#ff8c00',border:'1.5px dashed #252525',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>+ SERIE MANUAL</button>
@@ -410,6 +410,58 @@ function ProgressionSetup({exerciseName, config, onSave, onClose}) {
           <button onClick={onClose} style={{flex:1,padding:'14px',background:'transparent',color:'#555',border:'1.5px solid #2a2a2a',borderRadius:8,fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>CANCELAR</button>
           <button onClick={()=>onSave(cfg)} style={{flex:2,padding:'14px',background:'linear-gradient(135deg,#ff8c00,#e06600)',color:'#080808',border:'none',borderRadius:8,fontSize:14,fontWeight:900,cursor:'pointer',fontFamily:'inherit',letterSpacing:2}}>GUARDAR</button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════ HELP MODAL ═══════════ */
+function HelpModal({ onClose }) {
+  const S = ({children}) => <div style={{fontSize:8,letterSpacing:3,color:'#ff8c00',fontWeight:900,marginTop:20,marginBottom:8}}>{children}</div>
+  const R = ({icon,text,sub}) => (
+    <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:8}}>
+      <div style={{fontSize:14,flexShrink:0,width:20,textAlign:'center',marginTop:1}}>{icon}</div>
+      <div>
+        <div style={{fontSize:12,fontWeight:700,color:'#f0ece3'}}>{text}</div>
+        {sub&&<div style={{fontSize:11,color:'#555',marginTop:1}}>{sub}</div>}
+      </div>
+    </div>
+  )
+  return (
+    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.9)',zIndex:400,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:'#111',border:'1px solid #2a2a2a',borderRadius:'16px 16px 0 0',padding:'24px 20px 36px',width:'100%',maxWidth:480,maxHeight:'88vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+          <div style={{fontSize:9,letterSpacing:5,color:'#ff8c00',fontWeight:900}}>⬡ IRON LOG</div>
+          <button onClick={onClose} style={{background:'transparent',border:'none',color:'#555',fontSize:18,cursor:'pointer',padding:'0 2px'}}>✕</button>
+        </div>
+        <div style={{fontSize:13,fontWeight:800,color:'#f0ece3',marginBottom:2}}>Guía rápida</div>
+        <div style={{fontSize:11,color:'#444',marginBottom:4}}>Toca fuera para cerrar</div>
+
+        <S>SESIÓN DIARIA</S>
+        <R icon="1️⃣" text="Selecciona Día A o Día B" sub="Alterna en cada entreno"/>
+        <R icon="▼" text="Expande un ejercicio" sub="Pon carga y reps con los botones +/−"/>
+        <R icon="RIR" text="Marca cuántas reps te quedan" sub="0 = al fallo · 2 = 2 reps en reserva · 4+ = muy ligero"/>
+        <R icon="✓" text="Pulsa HECHA al terminar la serie" sub="Arranca el crono y el descanso automático"/>
+        <R icon="💾" text="GUARDAR SESIÓN al terminar" sub="El botón aparece tras marcar la 1ª serie"/>
+
+        <S>PROGRESIÓN</S>
+        <R icon="🟢" text="+Xkg — sube la carga la próxima sesión" sub="Completaste todas las series en el rango alto con suficiente RIR"/>
+        <R icon="🟡" text="Mantener carga" sub="Sigue trabajando en ese rango"/>
+        <R icon="🔴" text="Ajustar carga" sub="Bajaste de las reps mínimas, reduce el peso"/>
+        <R icon="⚠️" text="Sin mejora en 3 sesiones" sub="Ejercicio estancado — considera cambiar el estímulo"/>
+        <R icon="⚙️" text="Configura series, reps e incremento" sub="Personaliza el objetivo de cada ejercicio"/>
+
+        <S>MESOCICLO Y DELOAD</S>
+        <R icon="📊" text="Toca la barra superior para configurarlo" sub="Pon fecha de inicio y número de semanas"/>
+        <R icon="🔄" text="Última semana → banner de deload" sub="Reduce carga e intensidad esa semana, luego configura un nuevo mesociclo"/>
+
+        <S>SEÑALES DE FATIGA</S>
+        <R icon="⚠️" text="Banner rojo en LOG" sub="RIR medio ≤1 · caída en 2+ ejercicios · sesión inusualmente lenta"/>
+
+        <S>VISTAS</S>
+        <R icon="📊" text="VOLUMEN — series semanales por músculo" sub="Verde = rango óptimo (MAV) · rojo = cerca del MRV"/>
+        <R icon="📈" text="PROGRESO — gráfico 1RM estimado por ejercicio" sub="Punto rojo = estancado · caja TENDENCIA = últimas 3 sesiones"/>
+        <R icon="🗂" text="HISTORIAL — todas las sesiones guardadas" sub="⬇ Exportar backup · ⬆ Restaurar en otro dispositivo"/>
       </div>
     </div>
   )
@@ -606,6 +658,7 @@ export default function App() {
   const [showProgSetup,setShowProgSetup] = useState(false)
   const [progSetupEx,setProgSetupEx] = useState(null)
   const [fatigueSignals,setFatigueSignals] = useState([])
+  const [showHelp,setShowHelp] = useState(false)
   const sessRef=useRef(null), restRef=useRef(null)
 
   useEffect(()=>{const t=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(t);},[])
@@ -753,7 +806,10 @@ export default function App() {
       <div style={{background:'#0e0e0e',borderBottom:'2px solid #ff8c00',padding:'12px 14px 10px',position:'sticky',top:0,zIndex:100}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
           <div>
-            <div style={{fontSize:9,letterSpacing:5,color:'#ff8c00',fontWeight:800}}>⬡ IRON LOG</div>
+            <div style={{display:'flex',alignItems:'center',gap:7}}>
+              <div style={{fontSize:9,letterSpacing:5,color:'#ff8c00',fontWeight:800}}>⬡ IRON LOG</div>
+              <button onClick={()=>setShowHelp(true)} style={{width:18,height:18,borderRadius:'50%',background:'#1a1000',border:'1.5px solid #ff8c0066',color:'#ff8c00aa',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,padding:0,fontFamily:'inherit',flexShrink:0}}>?</button>
+            </div>
             <div style={{fontSize:11,color:'#3a3a3a',letterSpacing:1,marginTop:1}}>{now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}).toUpperCase()}</div>
           </div>
           <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
@@ -933,6 +989,7 @@ export default function App() {
       {view==='progress'&&<ProgressView key={activeDay} sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests} allSessions={sessions} dayIdx={activeDay}/>}
 
       {showMesoSetup&&<MesoSetup current={mesocycle} onSave={saveMeso} onClose={()=>setShowMesoSetup(false)}/>}
+      {showHelp&&<HelpModal onClose={()=>setShowHelp(false)}/>}
       {showProgSetup&&progSetupEx&&(
         <ProgressionSetup
           exerciseName={progSetupEx}
