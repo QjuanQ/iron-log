@@ -726,7 +726,7 @@ export default function App() {
   const handleSetUndone = (ei,si) => { updateEx(ei,e=>{const sets=[...e.sets];sets[si]={...sets[si],done:false};return{...e,sets}}) }
 
   const saveSession = () => {
-    const s={...current[activeDay],savedAt:new Date().toISOString(),duration:sessionElapsed,exercises:current[activeDay].exercises.map(ex=>({...ex,photo:null}))}
+    const s={...current[activeDay],date:new Date().toISOString().split('T')[0],savedAt:new Date().toISOString(),duration:sessionElapsed,exercises:current[activeDay].exercises.map(ex=>({...ex,photo:null}))}
     const ns={...sessions,[activeDay]:[s,...(sessions[activeDay]||[])]}
     const nc={...current,[activeDay]:defaultSession(activeDay)}
     setSessions(ns);setCurrent(nc);setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0)
@@ -856,15 +856,15 @@ export default function App() {
         </div>
       )}
 
-      {/* DAY TABS */}
-      <div style={{display:'flex',margin:'8px 12px 0',gap:8}}>
+      {/* DAY TABS — solo en log */}
+      {view==='log'&&<div style={{display:'flex',margin:'8px 12px 0',gap:8}}>
         {['DÍA A','DÍA B'].map((d,i)=>(
           <button key={i} onClick={()=>{setActiveDay(i);setExpandedEx(0)}} style={{flex:1,padding:'11px 8px',background:activeDay===i?'#161616':'transparent',border:`2px solid ${activeDay===i?'#ff8c00':'#1e1e1e'}`,borderRadius:6,color:activeDay===i?'#ff8c00':'#333',fontSize:15,fontWeight:900,letterSpacing:3,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
             {d}
             {(sessions[i]||[]).length>0&&<span style={{position:'absolute',top:4,right:6,background:'#ff8c00',color:'#080808',borderRadius:10,fontSize:9,fontWeight:900,padding:'1px 5px'}}>{(sessions[i]||[]).length}</span>}
           </button>
         ))}
-      </div>
+      </div>}
 
       {/* REST TIMER */}
       {(restTime>0||restRunning)&&(
