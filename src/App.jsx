@@ -67,7 +67,9 @@ const calc1RM = (load,reps) => { const l=parseFloat(load),r=parseInt(reps); if(!
 const fmt = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; return h>0?`${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}` }
 const getWeekYear = d => { const dt=new Date(d); dt.setHours(0,0,0,0); dt.setDate(dt.getDate()+3-(dt.getDay()+6)%7); const w1=new Date(dt.getFullYear(),0,4); return `${dt.getFullYear()}-W${String(1+Math.round(((dt-w1)/86400000-3+(w1.getDay()+6)%7)/7)).padStart(2,'0')}` }
 const EMPTY_SET = {load:'',reps:'',rir:'',done:false}
-const defaultSession = d => ({date:new Date().toISOString().split('T')[0],exercises:EXERCISES[d].map(name=>({name,sets:[{...EMPTY_SET}],notes:'',photo:null}))})
+const localDateStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
+const parseLocalDate = s => new Date(s+'T00:00:00')
+const defaultSession = d => ({date:localDateStr(),exercises:EXERCISES[d].map(name=>({name,sets:[{...EMPTY_SET}],notes:'',photo:null}))})
 const calcAllTimeBests = sessions => { const b={}; for(const d of[0,1])for(const s of(sessions[d]||[]))for(const ex of s.exercises){const best=Math.max(...ex.sets.map(s=>calc1RM(s.load,s.reps)||0));if(best>0&&(!b[ex.name]||best>b[ex.name]))b[ex.name]=best;} return b }
 function evaluateProgression(exerciseList, userProgConfig) {
   const results = {}
@@ -193,11 +195,14 @@ function SetRow({ s, si, onChange, onDelete, onDone, onUndone, exName, allTimeBe
   const rm = calc1RM(s.load, s.reps)
   const isPR = rm && allTimeBests[exName] && rm >= allTimeBests[exName]
   const canDone = !!(s.load && s.reps)
+  const stateColor = s.done ? '#4caf50' : (s.load || s.reps) ? '#ff8c00' : '#8b1a1a'
   return (
-    <div style={{background:s.done?'#0a1a0a':'#0d0d0d',border:`1.5px solid ${s.done?'#1e3a1e':isPR?'#4a3800':'#181818'}`,borderRadius:7,marginBottom:6,overflow:'hidden',transition:'background 0.2s'}}>
-      <div style={{display:'grid',gridTemplateColumns:'22px 1fr 1fr 72px',gap:6,padding:'6px 8px',alignItems:'center'}}>
-        <div style={{width:22,height:22,borderRadius:4,background:s.done?'#1e4a1e':isPR?'#3a2a00':'#181818',color:s.done?'#4caf50':isPR?'#ffd12d':'#555',display:'flex',alignItems:'center',justifyContent:'center',fontSize:s.done?14:11,fontWeight:900}}>
-          {s.done?'✓':isPR?'★':si+1}
+    <div style={{background:s.done?'#0a1a0a':'#0d0d0d',border:`1.5px solid ${s.done?'#1e3a1e':isPR?'#4a3800':'#181818'}`,borderLeft:`3px solid ${stateColor}`,borderRadius:7,marginBottom:6,overflow:'hidden',transition:'background 0.2s'}}>
+      <div style={{display:'grid',gridTemplateColumns:'24px 1fr 1fr 72px',gap:6,padding:'6px 8px',alignItems:'center'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'center',width:24,height:52}}>
+          <div style={{width:22,height:22,borderRadius:4,background:`${stateColor}22`,color:stateColor,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:900,letterSpacing:0}}>
+            {si+1}
+          </div>
         </div>
         {/* CARGA */}
         <div style={{display:'flex',gap:3,alignItems:'center',background:'#131313',border:'1px solid #222',borderRadius:6,padding:'3px 2px'}}>
@@ -330,8 +335,11 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
           {ex.sets.map((s,si)=>(
             <SetRow key={`${si}-${s.load}-${s.reps}-${s.done}`} s={s} si={si} onChange={(f,v)=>updateSet(si,f,v)} onDelete={()=>removeSet(si)} onDone={()=>onSetDone(si)} onUndone={()=>onSetUndone(si)} exName={ex.name} allTimeBests={allTimeBests}/>
           ))}
-          <div style={{display:'flex',gap:7,marginTop:8}}>
-            <button onClick={addSet} style={{flex:1,padding:'10px',background:'transparent',color:'#ff8c00',border:'1.5px dashed #252525',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>+ SERIE MANUAL</button>
+          {done.length >= cfg.setsTarget && (
+            <div style={{textAlign:'center',padding:'7px 10px',marginBottom:6,background:'#0a1a0a',border:'1px solid #1e4a1e',borderRadius:6,fontSize:11,fontWeight:900,color:'#4caf50',letterSpacing:2}}>✓ OBJETIVO</div>
+          )}
+          <div style={{display:'flex',gap:7,marginTop:4}}>
+            <button onClick={addSet} style={{flex:1,padding:'9px',background:'transparent',color:'#333',border:'1.5px dashed #1e1e1e',borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>+ SERIE EXTRA</button>
             <button onClick={()=>onRest(restDuration)} style={{padding:'10px 16px',background:'#161616',color:'#ff8c00',border:'1.5px solid #222',borderRadius:6,fontSize:16,cursor:'pointer'}}>⏱</button>
           </div>
           <textarea value={ex.notes} rows={2} onChange={e=>onChange(ex=>({...ex,notes:e.target.value}))} placeholder="Técnica, sensaciones..." style={{width:'100%',background:'#090909',border:'1.5px solid #1c1c1c',borderRadius:6,color:'#aaa',padding:'8px 10px',fontSize:12,outline:'none',resize:'none',lineHeight:1.5,marginTop:10,boxSizing:'border-box',fontFamily:'inherit'}}/>
@@ -438,30 +446,46 @@ function HelpModal({ onClose }) {
         <div style={{fontSize:11,color:'#444',marginBottom:4}}>Toca fuera para cerrar</div>
 
         <S>SESIÓN DIARIA</S>
-        <R icon="1️⃣" text="Selecciona Día A o Día B" sub="Alterna en cada entreno"/>
+        <R icon="1️⃣" text="Selecciona Día A o Día B" sub="Alterna entre los dos días de entreno"/>
+        <R icon="▶" text="Pulsa INICIAR para arrancar el cronómetro" sub="La sesión no empieza hasta que lo actives"/>
         <R icon="▼" text="Expande un ejercicio" sub="Pon carga y reps con los botones +/−"/>
+        <R icon="●" text="Barra lateral de color por serie" sub="Rojo = sin iniciar · Naranja = en curso · Verde = completada"/>
         <R icon="RIR" text="Marca cuántas reps te quedan" sub="0 = al fallo · 2 = 2 reps en reserva · 4+ = muy ligero"/>
-        <R icon="✓" text="Pulsa HECHA al terminar la serie" sub="Arranca el crono y el descanso automático"/>
-        <R icon="💾" text="GUARDAR SESIÓN al terminar" sub="El botón aparece tras marcar la 1ª serie"/>
+        <R icon="✓" text="Pulsa HECHA al terminar la serie" sub="Activa el descanso automático si está encendido"/>
+        <R icon="✓" text="OBJETIVO — al completar las series planeadas" sub="Puedes añadir series extra con el botón inferior"/>
+        <R icon="■" text="Guardar sesión — confirma la fecha antes de guardar" sub="También disponible el botón GUARDAR SESIÓN al final"/>
+        <R icon="✕" text="Descartar sesión — borra la sesión en curso" sub="Pide confirmación antes de borrar"/>
+
+        <S>DESCANSO</S>
+        <R icon="⏱" text="Presets de descanso: 1' · 1'30 · 2' · 3' · 4'" sub="Se guarda como default al seleccionar"/>
+        <R icon="±" text="−30s / +30s en el timer activo" sub="Ajustan el tiempo y guardan el nuevo default"/>
+        <R icon="AUTO" text="Descanso automático al marcar HECHA" sub="Actívalo/desactívalo con el botón AUTO"/>
 
         <S>PROGRESIÓN</S>
-        <R icon="🟢" text="+Xkg — sube la carga la próxima sesión" sub="Completaste todas las series en el rango alto con suficiente RIR"/>
-        <R icon="🟡" text="Mantener carga" sub="Sigue trabajando en ese rango"/>
-        <R icon="🔴" text="Ajustar carga" sub="Bajaste de las reps mínimas, reduce el peso"/>
-        <R icon="⚠️" text="Sin mejora en 3 sesiones" sub="Ejercicio estancado — considera cambiar el estímulo"/>
-        <R icon="⚙️" text="Configura series, reps e incremento" sub="Personaliza el objetivo de cada ejercicio"/>
+        <R icon="🟢" text="+Xkg — sube la carga la próxima sesión" sub="Completaste todas las series en el rango alto con RIR suficiente"/>
+        <R icon="🟡" text="Mantener carga" sub="Sigue trabajando en ese rango de reps"/>
+        <R icon="🔴" text="Ajustar carga — bajaste de las reps mínimas" sub="Reduce el peso la próxima sesión"/>
+        <R icon="⚠️" text="Sin mejora en 3 sesiones seguidas" sub="Ejercicio estancado — considera cambiar estímulo o carga"/>
+        <R icon="⚙️" text="Configura series objetivo, rango de reps e incremento" sub="Cada ejercicio tiene sus propios valores"/>
 
         <S>MESOCICLO Y DELOAD</S>
-        <R icon="📊" text="Toca la barra superior para configurarlo" sub="Pon fecha de inicio y número de semanas"/>
-        <R icon="🔄" text="Última semana → banner de deload" sub="Reduce carga e intensidad esa semana, luego configura un nuevo mesociclo"/>
+        <R icon="📊" text="Toca la barra de progreso para configurarlo" sub="Pon fecha de inicio y número de semanas"/>
+        <R icon="🔄" text="Última semana → banner de deload" sub="Reduce volumen e intensidad, luego configura un nuevo mesociclo"/>
+        <R icon="⚠️" text="Señales de fatiga — banner rojo en SESIÓN" sub="RIR medio ≤1 · caída en 2+ ejercicios · sesión inusualmente lenta"/>
 
-        <S>SEÑALES DE FATIGA</S>
-        <R icon="⚠️" text="Banner rojo en LOG" sub="RIR medio ≤1 · caída en 2+ ejercicios · sesión inusualmente lenta"/>
+        <S>SESIÓN EN CURSO</S>
+        <R icon="⏸" text="Puedes salir de la app y continuar después" sub="El cronómetro sigue contando aunque cierres la app"/>
+        <R icon="🗂" text="En HISTORIAL aparece la sesión en curso" sub="Toca → CONTINUAR para volver a ella"/>
+
+        <S>HISTORIAL</S>
+        <R icon="‹›" text="Navega por meses con las flechas" sub="Solo se muestran las sesiones del mes seleccionado"/>
+        <R icon="🗑" text="Borra una sesión individual" sub="Pide confirmación — la acción no se puede deshacer"/>
+        <R icon="⬇" text="Exportar backup completo" sub="Incluye sesiones, configuración y progresión"/>
+        <R icon="⬆" text="Restaurar backup" sub="Sobreescribe todos los datos actuales"/>
 
         <S>VISTAS</S>
-        <R icon="📊" text="VOLUMEN — series semanales por músculo" sub="Verde = rango óptimo (MAV) · rojo = cerca del MRV"/>
-        <R icon="📈" text="PROGRESO — gráfico 1RM estimado por ejercicio" sub="Punto rojo = estancado · caja TENDENCIA = últimas 3 sesiones"/>
-        <R icon="🗂" text="HISTORIAL — todas las sesiones guardadas" sub="⬇ Exportar backup · ⬆ Restaurar en otro dispositivo"/>
+        <R icon="📊" text="VOLUMEN — series semanales por músculo" sub="Verde = rango óptimo (MAV) · naranja/rojo = cerca del MRV"/>
+        <R icon="📈" text="PROGRESO — evolución del 1RM estimado" sub="Punto rojo = estancado · TENDENCIA = últimas 3 sesiones"/>
       </div>
     </div>
   )
@@ -469,7 +493,7 @@ function HelpModal({ onClose }) {
 
 /* ═══════════ MESO SETUP ═══════════ */
 function MesoSetup({ current, onSave, onClose }) {
-  const [startDate, setStartDate] = useState(current?.startDate || new Date().toISOString().split('T')[0])
+  const [startDate, setStartDate] = useState(current?.startDate || localDateStr())
   const [totalWeeks, setTotalWeeks] = useState(current?.totalWeeks || 6)
   return (
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:400,display:'flex',alignItems:'flex-end',justifyContent:'center'}}>
@@ -495,7 +519,7 @@ function MesoSetup({ current, onSave, onClose }) {
 /* ═══════════ VOLUME VIEW ═══════════ */
 function VolumeView({ sessions }) {
   const [weekOffset, setWeekOffset] = useState(0)
-  const getOW = off => { const d=new Date(); d.setDate(d.getDate()+off*7); return getWeekYear(d.toISOString().split('T')[0]) }
+  const getOW = off => { const d=new Date(); d.setDate(d.getDate()+off*7); return getWeekYear(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`) }
   const tw = getOW(weekOffset)
   const { muscles, tonelaje } = calcWeekVolume(sessions, tw)
   const prev = calcWeekVolume(sessions, getOW(weekOffset-1))
@@ -659,7 +683,24 @@ export default function App() {
   const [progSetupEx,setProgSetupEx] = useState(null)
   const [fatigueSignals,setFatigueSignals] = useState([])
   const [showHelp,setShowHelp] = useState(false)
+  const [showSaveConfirm,setShowSaveConfirm] = useState(false)
+  const [pendingSaveDate,setPendingSaveDate] = useState('')
+  const [historyMonth,setHistoryMonth] = useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`})
   const sessRef=useRef(null), restRef=useRef(null)
+  const timerStateRef=useRef({started:false,elapsed:0,paused:false,dayIdx:0})
+
+  useEffect(()=>{
+    timerStateRef.current={started:sessionStarted,elapsed:sessionElapsed,paused:sessionPaused,dayIdx:activeDay}
+  },[sessionStarted,sessionElapsed,sessionPaused,activeDay])
+
+  useEffect(()=>{
+    const onHide=()=>{
+      const{started,elapsed,paused,dayIdx}=timerStateRef.current
+      if(started)storage.set('session_state',JSON.stringify({started,elapsed,paused,dayIdx,savedAt:new Date().toISOString()}))
+    }
+    document.addEventListener('visibilitychange',onHide)
+    return()=>document.removeEventListener('visibilitychange',onHide)
+  },[])
 
   useEffect(()=>{const t=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(t);},[])
   useEffect(()=>{
@@ -680,10 +721,12 @@ export default function App() {
       const c=await storage.get('curr');if(c)setCurrent(JSON.parse(c.value))
       const m=await storage.get('meso');if(m)setMesocycle(JSON.parse(m.value))
       const ar=await storage.get('autorest');if(ar)setAutoRest(JSON.parse(ar.value))
+      const rd=await storage.get('rest_duration');if(rd)setRestDuration(JSON.parse(rd.value))
       const pc=await storage.get('progression_config');if(pc){loadedProgConfig=JSON.parse(pc.value);setProgConfig(loadedProgConfig)}
       const ps=await storage.get('progression_status');if(ps)setProgStatus(JSON.parse(ps.value))
       const ddw=await storage.get('deload_dismissed_week');if(ddw)setDeloadDismissedWeek(JSON.parse(ddw.value))
       if(parsedSess)setFatigueSignals(detectFatigueSignals(parsedSess,loadedProgConfig))
+      const ss=await storage.get('session_state');if(ss){const st=JSON.parse(ss.value);if(st.started){setSessionStarted(true);setSessionPaused(st.paused||false);const add=st.paused?0:Math.floor((Date.now()-new Date(st.savedAt))/1000);setSessionElapsed((st.elapsed||0)+add);if(st.dayIdx!=null)setActiveDay(st.dayIdx)}}
       setLoaded(true)
     })()
   },[])
@@ -700,7 +743,7 @@ export default function App() {
   const saveMeso = (startDate,totalWeeks) => { const m={startDate,totalWeeks}; setMesocycle(m); setShowMesoSetup(false); storage.set('meso',JSON.stringify(m)) }
   const getMesoWeek = () => {
     if(!mesocycle)return null
-    const week=Math.max(1,Math.floor((new Date()-new Date(mesocycle.startDate))/604800000)+1)
+    const week=Math.max(1,Math.floor((new Date()-parseLocalDate(mesocycle.startDate))/604800000)+1)
     return{week,total:mesocycle.totalWeeks,pct:Math.min(100,Math.round((week/mesocycle.totalWeeks)*100)),deload:week>=mesocycle.totalWeeks}
   }
 
@@ -719,18 +762,20 @@ export default function App() {
     if(!s.load||!s.reps)return
     const rm=calc1RM(s.load,s.reps)
     if(rm){const prevBest=allTimeBests[ex.name]||0;if(rm>=prevBest){setAllTimeBests(prev=>({...prev,[ex.name]:rm}));setNewPRs(prev=>({...prev,[ex.name]:rm}));setTimeout(()=>setNewPRs(prev=>{const n={...prev};delete n[ex.name];return n;}),4000)}}
-    updateEx(ei,e=>{const sets=[...e.sets];sets[si]={...sets[si],done:true};if(si===sets.length-1)sets.push({...EMPTY_SET,load:s.load,rir:s.rir});return{...e,sets}})
+    updateEx(ei,e=>{const sets=[...e.sets];sets[si]={...sets[si],done:true};const cfg=getProgConfig(e.name,progConfig);if(si===sets.length-1&&sets.length<cfg.setsTarget)sets.push({...EMPTY_SET,load:s.load,rir:s.rir});return{...e,sets}})
     if(autoRest)startRest(restDuration)
   }
 
   const handleSetUndone = (ei,si) => { updateEx(ei,e=>{const sets=[...e.sets];sets[si]={...sets[si],done:false};return{...e,sets}}) }
 
-  const saveSession = () => {
-    const s={...current[activeDay],date:new Date().toISOString().split('T')[0],savedAt:new Date().toISOString(),duration:sessionElapsed,exercises:current[activeDay].exercises.map(ex=>({...ex,photo:null}))}
+  const openSaveConfirm = () => { setPendingSaveDate(localDateStr()); setShowSaveConfirm(true) }
+  const saveSession = (date=localDateStr()) => {
+    const s={...current[activeDay],date,savedAt:new Date().toISOString(),duration:sessionElapsed,exercises:current[activeDay].exercises.map(ex=>({...ex,photo:null}))}
     const ns={...sessions,[activeDay]:[s,...(sessions[activeDay]||[])]}
     const nc={...current,[activeDay]:defaultSession(activeDay)}
     setSessions(ns);setCurrent(nc);setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0)
     setAllTimeBests(calcAllTimeBests(ns));persist(ns,nc);setSaved(true);setTimeout(()=>setSaved(false),2500)
+    storage.set('session_state',JSON.stringify({started:false}))
     const newPS=evaluateProgression(s.exercises,progConfig)
     const mergedPS={...progStatus,...newPS}
     setProgStatus(mergedPS);storage.set('progression_status',JSON.stringify(mergedPS))
@@ -743,15 +788,11 @@ export default function App() {
     setDeloadDismissedWeek(key);storage.set('deload_dismissed_week',JSON.stringify(key))
   }
 
-  const copyLastSession = () => {
-    const prev=(sessions[activeDay]||[])[0];if(!prev)return
-    const nc={...current,[activeDay]:{...current[activeDay],exercises:prev.exercises.map(ex=>({...ex,photo:null,sets:ex.sets.map(s=>({...s,done:false}))}))}}
-    setCurrent(nc);persist(sessions,nc)
-  }
-
   const handleBackup = async () => {
-    const [s,c,m,ar] = await Promise.all([storage.get('sess'),storage.get('curr'),storage.get('meso'),storage.get('autorest')])
-    const data = {version:1,exportedAt:new Date().toISOString(),sess:s?.value,curr:c?.value,meso:m?.value,autorest:ar?.value}
+    const keys = ['sess','curr','meso','autorest','rest_duration','progression_config','progression_status','deload_dismissed_week']
+    const vals = await Promise.all(keys.map(k=>storage.get(k)))
+    const data = {version:2,exportedAt:new Date().toISOString()}
+    keys.forEach((k,i)=>{ if(vals[i])data[k]=vals[i].value })
     const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'})
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -768,6 +809,10 @@ export default function App() {
       if(data.curr){await storage.set('curr',data.curr);setCurrent(JSON.parse(data.curr))}
       if(data.meso){await storage.set('meso',data.meso);setMesocycle(JSON.parse(data.meso))}
       if(data.autorest!=null){await storage.set('autorest',data.autorest);setAutoRest(JSON.parse(data.autorest))}
+      if(data.rest_duration!=null){await storage.set('rest_duration',data.rest_duration);setRestDuration(JSON.parse(data.rest_duration))}
+      if(data.progression_config){await storage.set('progression_config',data.progression_config);setProgConfig(JSON.parse(data.progression_config))}
+      if(data.progression_status){await storage.set('progression_status',data.progression_status);setProgStatus(JSON.parse(data.progression_status))}
+      if(data.deload_dismissed_week!=null){await storage.set('deload_dismissed_week',data.deload_dismissed_week);setDeloadDismissedWeek(JSON.parse(data.deload_dismissed_week))}
       alert('✓ Backup restaurado')
     } catch {
       alert('Error al leer el archivo')
@@ -817,12 +862,12 @@ export default function App() {
               <div style={{display:'flex',alignItems:'center',gap:5,background:'#161616',border:'1px solid #2a2a2a',borderRadius:20,padding:'3px 8px'}}>
                 <div style={{width:6,height:6,borderRadius:'50%',background:sessionPaused?'#ffaa2d':'#ff4444',animation:sessionPaused?'none':'blink 1s infinite'}}/>
                 <span style={{fontSize:13,fontWeight:800,letterSpacing:1,color:sessionPaused?'#ffaa2d':'#f0ece3'}}>{fmt(sessionElapsed)}</span>
-                <button onClick={()=>setSessionPaused(p=>!p)} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:13,cursor:'pointer',padding:'0 2px'}}>{sessionPaused?'▶':'⏸'}</button>
-                <button onClick={saveSession} style={{background:'transparent',border:'none',color:'#4caf50',fontSize:11,cursor:'pointer',padding:'0 2px',fontWeight:900}}>■</button>
-                <button onClick={()=>{if(window.confirm('¿Descartar sesión?')){setCurrent(c=>({...c,[activeDay]:defaultSession(activeDay)}));setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0)}}} style={{background:'transparent',border:'none',color:'#3a3a3a',fontSize:13,cursor:'pointer',padding:'0 2px'}}>✕</button>
+                <button onClick={()=>{const np=!sessionPaused;setSessionPaused(np);storage.set('session_state',JSON.stringify({started:true,elapsed:sessionElapsed,paused:np,dayIdx:activeDay,savedAt:new Date().toISOString()}))}} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:13,cursor:'pointer',padding:'0 2px'}}>{sessionPaused?'▶':'⏸'}</button>
+                <button onClick={openSaveConfirm} style={{background:'transparent',border:'none',color:'#4caf50',fontSize:11,cursor:'pointer',padding:'0 2px',fontWeight:900}}>■</button>
+                <button onClick={()=>{if(window.confirm('¿Descartar sesión?')){setCurrent(c=>({...c,[activeDay]:defaultSession(activeDay)}));setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0);storage.set('session_state',JSON.stringify({started:false}))}}} style={{background:'transparent',border:'none',color:'#3a3a3a',fontSize:13,cursor:'pointer',padding:'0 2px'}}>✕</button>
               </div>
             ):(
-              <button onClick={()=>{setSessionStarted(true);setSessionElapsed(0)}} style={{background:'#1a0e00',border:'1.5px solid #ff8c00',borderRadius:20,padding:'4px 12px',color:'#ff8c00',fontSize:11,fontWeight:900,cursor:'pointer',letterSpacing:1,fontFamily:'inherit'}}>▶ INICIAR</button>
+              <button onClick={()=>{setSessionStarted(true);setSessionElapsed(0);storage.set('session_state',JSON.stringify({started:true,elapsed:0,paused:false,dayIdx:activeDay,savedAt:new Date().toISOString()}))}} style={{background:'#1a0e00',border:'1.5px solid #ff8c00',borderRadius:20,padding:'4px 12px',color:'#ff8c00',fontSize:11,fontWeight:900,cursor:'pointer',letterSpacing:1,fontFamily:'inherit'}}>▶ INICIAR</button>
             )}
           </div>
         </div>
@@ -874,7 +919,8 @@ export default function App() {
           <div style={{height:3,background:'#1e1e1e',borderRadius:2,margin:'7px 0 8px'}}><div style={{height:3,borderRadius:2,background:restTime<30?'#ff4444':'#ff8c00',width:`${(restTime/restDuration)*100}%`,transition:'width 1s linear'}}/></div>
           <div style={{display:'flex',gap:6,justifyContent:'center'}}>
             {restRunning?<button onClick={()=>setRestRunning(false)} style={pill('#333','#aaa')}>⏸</button>:<button onClick={()=>setRestRunning(true)} style={pill('#ff8c00','#080808')}>▶</button>}
-            <button onClick={()=>{setRestTime(t=>t+30);setRestRunning(true)}} style={pill('#222','#888')}>+30s</button>
+            <button onClick={()=>{const nd=Math.max(30,restTime-30);setRestTime(nd);const nDur=Math.max(30,restDuration-30);setRestDuration(nDur);storage.set('rest_duration',JSON.stringify(nDur))}} style={pill('#222','#888')}>−30s</button>
+            <button onClick={()=>{const nd=restTime+30;setRestTime(nd);const nDur=restDuration+30;setRestDuration(nDur);storage.set('rest_duration',JSON.stringify(nDur));setRestRunning(true)}} style={pill('#222','#888')}>+30s</button>
             <button onClick={()=>{setRestTime(0);setRestRunning(false)}} style={pill('#1a1a1a','#555')}>✕</button>
           </div>
         </div>
@@ -897,7 +943,7 @@ export default function App() {
             <span style={{fontSize:8,letterSpacing:1,color:'#444',fontWeight:800,flexShrink:0}}>⏱</span>
             <div style={{display:'flex',gap:3,flex:1}}>
               {REST_PRESETS.map(s=>(
-                <button key={s} onClick={()=>setRestDuration(s)} style={{flex:1,padding:'5px 0',background:restDuration===s?'#ff8c00':'#1a1a1a',color:restDuration===s?'#080808':'#555',border:`1px solid ${restDuration===s?'#ff8c00':'#222'}`,borderRadius:3,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+                <button key={s} onClick={()=>{setRestDuration(s);storage.set('rest_duration',JSON.stringify(s))}} style={{flex:1,padding:'5px 0',background:restDuration===s?'#ff8c00':'#1a1a1a',color:restDuration===s?'#080808':'#555',border:`1px solid ${restDuration===s?'#ff8c00':'#222'}`,borderRadius:3,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
                   {s>=60?`${s/60}'`:`${s}"`}
                 </button>
               ))}
@@ -906,12 +952,6 @@ export default function App() {
               AUTO {autoRest?'●':'○'}
             </button>
           </div>
-          {prevSess&&(
-            <div style={{display:'flex',alignItems:'center',gap:8,background:'#0d0d0d',border:'1px solid #191919',borderLeft:'3px solid #ff8c00',borderRadius:6,padding:'7px 10px',marginBottom:10}}>
-              <div style={{flex:1,fontSize:11,color:'#444'}}><span style={{color:'#ff8c00',fontWeight:700}}>↺</span>{' '}{new Date(prevSess.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}{prevSess.duration&&<span> · {fmt(prevSess.duration)}</span>}</div>
-              <button onClick={copyLastSession} style={{background:'#1a1a1a',border:'1.5px solid #ff8c00',borderRadius:5,padding:'5px 10px',fontSize:10,color:'#ff8c00',cursor:'pointer',fontFamily:'inherit',fontWeight:800,flexShrink:0,letterSpacing:1}}>📋 COPIAR</button>
-            </div>
-          )}
           {fatigueSignals.length>0&&(
             <div style={{background:'#1a0a0a',border:'1px solid #4a1a1a',borderRadius:6,padding:'9px 12px',marginBottom:10}}>
               <div style={{fontSize:9,letterSpacing:2,color:'#ff4444',fontWeight:800,marginBottom:4}}>⚠️ SEÑALES DE FATIGA</div>
@@ -936,7 +976,7 @@ export default function App() {
             />
           ))}
           {sessionStarted&&(
-            <button onClick={saveSession} style={{width:'100%',marginTop:16,padding:'17px',background:saved?'#0f2a0f':'linear-gradient(135deg,#ff8c00,#e06600)',color:saved?'#4caf50':'#080808',border:saved?'2px solid #4caf50':'none',borderRadius:8,fontSize:17,fontWeight:900,letterSpacing:3,cursor:'pointer',fontFamily:'inherit'}}>
+            <button onClick={openSaveConfirm} style={{width:'100%',marginTop:16,padding:'17px',background:saved?'#0f2a0f':'linear-gradient(135deg,#ff8c00,#e06600)',color:saved?'#4caf50':'#080808',border:saved?'2px solid #4caf50':'none',borderRadius:8,fontSize:17,fontWeight:900,letterSpacing:3,cursor:'pointer',fontFamily:'inherit'}}>
               {saved?'✓ SESIÓN GUARDADA':'GUARDAR SESIÓN'}
             </button>
           )}
@@ -947,6 +987,16 @@ export default function App() {
 
       {view==='history'&&(
         <div style={{padding:12}}>
+          {sessionStarted&&(
+            <div style={{background:'#0d0900',border:'1.5px solid #ff8c00',borderRadius:8,padding:'12px 14px',marginBottom:14,display:'flex',alignItems:'center',gap:12}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:9,fontWeight:900,color:'#ff8c00',letterSpacing:3}}>SESIÓN EN CURSO — DÍA {activeDay===0?'A':'B'}</div>
+                <div style={{fontSize:26,fontWeight:900,color:'#f0ece3',lineHeight:1.2,marginTop:3}}>{fmt(sessionElapsed)}</div>
+                <div style={{fontSize:10,color:'#555',marginTop:2}}>{current[activeDay].exercises.reduce((a,ex)=>a+ex.sets.filter(s=>s.done).length,0)} series completadas</div>
+              </div>
+              <button onClick={()=>setView('log')} style={{background:'#ff8c00',color:'#080808',border:'none',borderRadius:8,padding:'12px 14px',fontSize:11,fontWeight:900,cursor:'pointer',fontFamily:'inherit',letterSpacing:1,flexShrink:0}}>→ CONTINUAR</button>
+            </div>
+          )}
           <div style={{display:'flex',gap:8,marginBottom:14}}>
             <button onClick={handleBackup} style={{flex:1,padding:'11px 8px',background:'#0e0e0e',color:'#ff8c00',border:'1.5px solid #ff8c00',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>⬇ EXPORTAR BACKUP</button>
             <label style={{flex:1,padding:'11px 8px',background:'#0e0e0e',color:'#555',border:'1.5px solid #2a2a2a',borderRadius:6,fontSize:11,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1,textAlign:'center'}}>
@@ -954,18 +1004,36 @@ export default function App() {
               <input type="file" accept=".json,application/json" onChange={handleRestore} style={{display:'none'}}/>
             </label>
           </div>
-          <div style={{fontSize:11,color:'#3a3a3a',letterSpacing:3,marginBottom:12,fontWeight:700}}>HISTORIAL — {activeDay===0?'DÍA A':'DÍA B'}</div>
-          {!(sessions[activeDay]||[]).length?<div style={{textAlign:'center',color:'#222',padding:40}}>Sin sesiones aún</div>:
-          (sessions[activeDay]||[]).map((s,si)=>(
-            <div key={si} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:12,marginBottom:10}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-                <div style={{fontSize:13,fontWeight:800,color:'#ff8c00'}}>{new Date(s.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}</div>
-                <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  {s.duration&&<span style={{fontSize:10,color:'#383838'}}>⏱ {fmt(s.duration)}</span>}
-                  <span style={{fontSize:10,color:'#2a2a2a'}}>#{(sessions[activeDay]||[]).length-si}</span>
-                  <button onClick={()=>{if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[activeDay]:sessions[activeDay].filter((_,i)=>i!==si)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#2a2a2a',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
+          {(()=>{
+            const adjMonth=m=>{const[y,mo]=m.split('-').map(Number);return mo===1?`${y-1}-12`:`${y}-${String(mo-1).padStart(2,'0')}`}
+            const advMonth=m=>{const[y,mo]=m.split('-').map(Number);return mo===12?`${y+1}-01`:`${y}-${String(mo+1).padStart(2,'0')}`}
+            const curMonth=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`
+            const monthLabel=m=>{const[y,mo]=m.split('-');return new Date(parseInt(y),parseInt(mo)-1,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'}).toUpperCase()}
+            const allDay=sessions[activeDay]||[]
+            const filtered=allDay.filter(s=>s.date&&s.date.startsWith(historyMonth))
+            return(<>
+              <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:7,padding:'8px 10px'}}>
+                <button onClick={()=>setHistoryMonth(adjMonth(historyMonth))} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:20,cursor:'pointer',padding:'0 4px',lineHeight:1}}>‹</button>
+                <div style={{flex:1,textAlign:'center'}}>
+                  <div style={{fontSize:9,color:'#444',letterSpacing:2,fontWeight:700}}>HISTORIAL — {activeDay===0?'DÍA A':'DÍA B'}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:'#f0ece3'}}>{monthLabel(historyMonth)}</div>
                 </div>
+                <button onClick={()=>historyMonth<curMonth&&setHistoryMonth(advMonth(historyMonth))} style={{background:'transparent',border:'none',color:historyMonth<curMonth?'#ff8c00':'#333',fontSize:20,cursor:historyMonth<curMonth?'pointer':'default',padding:'0 4px',lineHeight:1}}>›</button>
               </div>
+              {!filtered.length
+                ?<div style={{textAlign:'center',color:'#333',padding:'30px 0',fontSize:11}}>Sin sesiones en {monthLabel(historyMonth)}</div>
+                :filtered.map((s,si)=>{
+                  const origIdx=allDay.indexOf(s)
+                  return(
+                    <div key={si} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:12,marginBottom:10}}>
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                        <div style={{fontSize:13,fontWeight:800,color:'#ff8c00'}}>{parseLocalDate(s.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}</div>
+                        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                          {s.duration&&<span style={{fontSize:10,color:'#383838'}}>⏱ {fmt(s.duration)}</span>}
+                          <span style={{fontSize:10,color:'#2a2a2a'}}>#{allDay.length-origIdx}</span>
+                          <button onClick={()=>{if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[activeDay]:sessions[activeDay].filter((_,i)=>i!==origIdx)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#2a2a2a',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
+                        </div>
+                      </div>
               {s.exercises.map((ex,ei)=>{
                 const done=ex.sets.filter(st=>st.load&&st.reps);if(!done.length)return null
                 const best=Math.max(...done.map(st=>calc1RM(st.load,st.reps)||0))
@@ -978,8 +1046,12 @@ export default function App() {
                   </div>
                 </div>)
               })}
-            </div>
-          ))}
+                    </div>
+                  )
+                })
+              }
+            </>)
+          })()}
           <div style={{marginTop:24,paddingTop:16,borderTop:'1px solid #222',textAlign:'center'}}>
             <div style={{fontSize:13,color:'#ff8c00',fontWeight:800,letterSpacing:3}}>⬡ IRON LOG</div>
             <div style={{fontSize:13,color:'#555',marginTop:6,fontWeight:700,letterSpacing:1}}>v{VERSION} · {BUILD_DATE}</div>
@@ -989,6 +1061,20 @@ export default function App() {
 
       {view==='progress'&&<ProgressView key={activeDay} sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests} allSessions={sessions} dayIdx={activeDay}/>}
 
+      {showSaveConfirm&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',zIndex:400,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setShowSaveConfirm(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#111',border:'1px solid #2a2a2a',borderRadius:'16px 16px 0 0',padding:'24px 20px 32px',width:'100%',maxWidth:480}}>
+            <div style={{fontSize:9,letterSpacing:4,color:'#4caf50',fontWeight:900,marginBottom:4}}>■ GUARDAR SESIÓN</div>
+            <div style={{fontSize:15,fontWeight:800,color:'#f0ece3',marginBottom:20}}>Confirma la fecha</div>
+            <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>FECHA DE LA SESIÓN</div>
+            <input type="date" value={pendingSaveDate} onChange={e=>setPendingSaveDate(e.target.value)} style={{width:'100%',background:'#0d0d0d',border:'1.5px solid #2a2a2a',borderRadius:6,color:'#f0ece3',padding:'12px 14px',fontSize:16,fontFamily:'inherit',outline:'none',marginBottom:20,boxSizing:'border-box'}}/>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>setShowSaveConfirm(false)} style={{flex:1,padding:'14px',background:'transparent',color:'#555',border:'1.5px solid #2a2a2a',borderRadius:8,fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>CANCELAR</button>
+              <button onClick={()=>{saveSession(pendingSaveDate);setShowSaveConfirm(false)}} style={{flex:2,padding:'14px',background:'linear-gradient(135deg,#2a6a2a,#1a4a1a)',color:'#4caf50',border:'1.5px solid #4caf50',borderRadius:8,fontSize:14,fontWeight:900,cursor:'pointer',fontFamily:'inherit',letterSpacing:2}}>GUARDAR</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showMesoSetup&&<MesoSetup current={mesocycle} onSave={saveMeso} onClose={()=>setShowMesoSetup(false)}/>}
       {showHelp&&<HelpModal onClose={()=>setShowHelp(false)}/>}
       {showProgSetup&&progSetupEx&&(
