@@ -585,69 +585,154 @@ function VolumeView({ sessions }) {
 /* ═══════════ PROGRESS VIEW ═══════════ */
 function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }) {
   const [sel, setSel] = useState(0)
-  const allData = [...sessions].reverse().map(s=>({date:s.date,ex:s.exercises[sel]})).filter(d=>d.ex)
-  const chartData = allData.map(d=>{const best=Math.max(...d.ex.sets.map(s=>calc1RM(s.load,s.reps)||0));const maxL=Math.max(...d.ex.sets.map(s=>parseFloat(s.load)||0));return{date:d.date,rm1:best,load:maxL};}).filter(d=>d.rm1>0||d.load>0)
+  const [range, setRange] = useState('3m')
+  const [metric, setMetric] = useState('1rm')
+  const [showGlobal, setShowGlobal] = useState(false)
+
+  const cutoff = (() => { const d=new Date(),mo={'1m':1,'3m':3,'6m':6}[range]; d.setMonth(d.getMonth()-mo); return d })()
+  const exName = exercises[sel]
+  const exBest = allTimeBests[exName] || 0
+
+  const buildChartData = (sess, exIdx) => [...sess].reverse()
+    .filter(s => parseLocalDate(s.date) >= cutoff)
+    .map(s => { const ex=s.exercises[exIdx]; if(!ex)return null; const done=ex.sets.filter(s=>s.load&&s.reps&&s.done); const rm1=Math.max(...ex.sets.map(s=>calc1RM(s.load,s.reps)||0)); const ton=done.reduce((a,s)=>a+(parseFloat(s.load)||0)*(parseInt(s.reps)||0),0); return{date:s.date,rm1,ton} })
+    .filter(d=>d&&(metric==='1rm'?d.rm1>0:d.ton>0))
+
+  const chartData = buildChartData(sessions, sel)
+  const yv = d => metric==='1rm' ? d.rm1 : d.ton
+  const yUnit = metric==='1rm' ? 'kg' : 'kg vol'
   const first=chartData[0], last=chartData[chartData.length-1]
-  const delta = last&&first ? Math.round((last.rm1-first.rm1)*10)/10 : 0
-  const exBest = allTimeBests[exercises[sel]] || 0
-  const recentChart = chartData.slice(-3)
-  const trendKg = recentChart.length >= 2 ? Math.round((recentChart[recentChart.length-1].rm1 - recentChart[0].rm1)*10)/10 : null
-  const trendLabel = trendKg === null ? '—' : trendKg > 0 ? `↗ +${trendKg}kg` : trendKg < 0 ? `↘ ${trendKg}kg` : '→ Estable'
-  const trendColor = trendKg === null ? '#333' : trendKg > 0 ? '#4caf50' : trendKg < 0 ? '#ff4444' : '#ffd12d'
+  const delta = last&&first ? Math.round((yv(last)-yv(first))*10)/10 : 0
+  const recent = chartData.slice(-3)
+  const trendV = recent.length>=2 ? Math.round((yv(recent[recent.length-1])-yv(recent[0]))*10)/10 : null
+  const trendLabel = trendV===null?'—':trendV>0?`↗ +${trendV}`:trendV<0?`↘ ${trendV}`:'→ Estable'
+  const trendColor = trendV===null?'#333':trendV>0?'#4caf50':trendV<0?'#ff4444':'#ffd12d'
+
+  // Global stats — all exercises both days
+  const globalStats = [0,1].flatMap(d=>EXERCISES[d].map((name,ei)=>{
+    const data=buildChartData(allSessions[d]||[],ei)
+    if(!data.length)return{name,d,noData:true}
+    const f=data[0],l=data[data.length-1]
+    const dlt=Math.round((yv(l)-yv(f))*10)/10
+    const rec=data.slice(-3)
+    const tr=rec.length>=2?Math.round((yv(rec[rec.length-1])-yv(rec[0]))*10)/10:null
+    return{name,d,current:yv(l),delta:dlt,trend:tr,sessions:data.length}
+  }))
+
+  const rangeBtn=(v,l)=><button onClick={()=>setRange(v)} style={{flex:1,padding:'5px 0',background:range===v?'#ff8c00':'#1a1a1a',color:range===v?'#080808':'#555',border:`1px solid ${range===v?'#ff8c00':'#222'}`,borderRadius:3,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>{l}</button>
+
   return (
     <div style={{padding:12}}>
-      <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:14}}>
-        {exercises.map((name,i)=>{
-          const stag = allSessions ? detectStagnation(allSessions, dayIdx??0, name) : {stagnant:false}
-          return (
-            <button key={i} onClick={()=>setSel(i)} style={{padding:'6px 9px',background:sel===i?'#ff8c00':'#0e0e0e',color:sel===i?'#080808':'#3a3a3a',border:`1px solid ${sel===i?'#ff8c00':'#1a1a1a'}`,borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
-              {name.split(' ').slice(0,2).join(' ')}
-              {stag.stagnant&&<span style={{position:'absolute',top:2,right:2,width:5,height:5,borderRadius:'50%',background:'#ff4444',display:'block'}}/>}
-            </button>
-          )
-        })}
+      {/* CONTROLS */}
+      <div style={{display:'flex',gap:6,marginBottom:10}}>
+        <div style={{display:'flex',gap:3,flex:1}}>
+          {rangeBtn('1m','1M')}{rangeBtn('3m','3M')}{rangeBtn('6m','6M')}
+        </div>
+        <button onClick={()=>setMetric(m=>m==='1rm'?'tonnage':'1rm')} style={{padding:'5px 10px',background:metric==='tonnage'?'#ff8c0022':'#1a1a1a',color:metric==='tonnage'?'#ff8c00':'#555',border:`1px solid ${metric==='tonnage'?'#ff8c00':'#222'}`,borderRadius:3,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+          {metric==='1rm'?'1RM':'TONEL.'}
+        </button>
+        <button onClick={()=>setShowGlobal(g=>!g)} style={{padding:'5px 10px',background:showGlobal?'#ff8c00':'#1a1a1a',color:showGlobal?'#080808':'#555',border:`1px solid ${showGlobal?'#ff8c00':'#222'}`,borderRadius:3,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
+          GLOBAL
+        </button>
       </div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-        <div style={{fontSize:14,fontWeight:800,borderLeft:'3px solid #ff8c00',paddingLeft:10}}>{exercises[sel]}</div>
-        {exBest>0&&<div style={{fontSize:11,color:'#ffd12d',fontWeight:800}}>🏆 PR: ~{exBest}kg</div>}
-      </div>
-      {!chartData.length?(<div style={{color:'#222',fontSize:13,textAlign:'center',padding:30}}>Sin datos para este ejercicio</div>):(
+
+      {showGlobal ? (
+        /* GLOBAL VIEW */
+        <div>
+          <div style={{fontSize:9,color:'#444',letterSpacing:3,fontWeight:800,marginBottom:10}}>TODOS LOS EJERCICIOS — {range==='1m'?'1 MES':range==='3m'?'3 MESES':'6 MESES'} — {metric==='1rm'?'1RM EST.':'TONELAJE'}</div>
+          {[0,1].map(d=>(
+            <div key={d} style={{marginBottom:16}}>
+              <div style={{fontSize:9,color:'#ff8c00',letterSpacing:3,fontWeight:900,marginBottom:6}}>DÍA {d===0?'A':'B'}</div>
+              {globalStats.filter(g=>g.d===d).map((g,i)=>{
+                if(g.noData)return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderTop:'1px solid #111',alignItems:'center'}}>
+                  <div style={{fontSize:11,color:'#2a2a2a',flex:1}}>{g.name}</div>
+                  <div style={{fontSize:10,color:'#1e1e1e'}}>Sin datos</div>
+                </div>)
+                const tc=g.trend===null?'#555':g.trend>0?'#4caf50':g.trend<0?'#ff4444':'#ffd12d'
+                const ti=g.trend===null?'—':g.trend>0?`↗ +${g.trend}`:g.trend<0?`↘ ${g.trend}`:'→'
+                return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderTop:'1px solid #111',alignItems:'center',gap:8}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,color:'#bbb',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.name}</div>
+                    <div style={{fontSize:9,color:'#333',marginTop:1}}>{g.sessions} sesiones</div>
+                  </div>
+                  <div style={{textAlign:'right',flexShrink:0}}>
+                    <div style={{fontSize:13,fontWeight:900,color:'#f0ece3'}}>{Math.round(g.current)}<span style={{fontSize:9,color:'#444',fontWeight:400}}>{metric==='1rm'?' kg':' kg'}</span></div>
+                    <div style={{fontSize:10,fontWeight:700,color:tc}}>{ti}</div>
+                  </div>
+                </div>)
+              })}
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* EXERCISE DETAIL VIEW */
         <>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
-            {[{label:'INICIO 1RM',value:`${first?.rm1||0}kg`,color:'#444'},{label:'MEJOR 1RM',value:`${exBest||Math.max(...chartData.map(d=>d.rm1))}kg`,color:'#ffd12d'},{label:'PROGRESO',value:`${delta>=0?'+':''}${delta}kg`,color:delta>=0?'#7ed957':'#ff4444'},{label:'TENDENCIA',value:trendLabel,color:trendColor}].map(({label,value,color})=>(
-              <div key={label} style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'10px 6px',textAlign:'center'}}>
-                <div style={{fontSize:8,letterSpacing:2,color:'#2e2e2e',fontWeight:800}}>{label}</div>
-                <div style={{fontSize:20,fontWeight:900,color,marginTop:3}}>{value}</div>
-              </div>
-            ))}
+          <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:12}}>
+            {exercises.map((name,i)=>{
+              const stag=allSessions?detectStagnation(allSessions,dayIdx??0,name):{stagnant:false}
+              return(<button key={i} onClick={()=>setSel(i)} style={{padding:'6px 9px',background:sel===i?'#ff8c00':'#0e0e0e',color:sel===i?'#080808':'#3a3a3a',border:`1px solid ${sel===i?'#ff8c00':'#1a1a1a'}`,borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
+                {name.split(' ').slice(0,2).join(' ')}
+                {stag.stagnant&&<span style={{position:'absolute',top:2,right:2,width:5,height:5,borderRadius:'50%',background:'#ff4444',display:'block'}}/>}
+              </button>)
+            })}
           </div>
-          {chartData.length>=2&&(()=>{
-            const vals=chartData.map(d=>d.rm1).filter(v=>v>0)
-            const mn=Math.min(...vals)*0.92, mx=Math.max(exBest||0,...vals)*1.06
-            const W=320, H=65
-            const pts=chartData.map((d,i)=>({x:(i/(chartData.length-1))*W,y:H-((d.rm1-mn)/(mx-mn||1))*H}))
-            const path=pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-            const area=path+` L${W},${H} L0,${H} Z`
-            const bestY=exBest?H-((exBest-mn)/(mx-mn||1))*H:null
-            return (
-              <div style={{background:'#0a0a0a',borderRadius:8,padding:'12px 8px 6px'}}>
-                <div style={{fontSize:8,color:'#282828',letterSpacing:3,marginBottom:4}}>1RM ESTIMADO — EPLEY</div>
-                <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:65}}>
-                  <defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff8c00" stopOpacity="0.2"/><stop offset="100%" stopColor="#ff8c00" stopOpacity="0"/></linearGradient></defs>
-                  <path d={area} fill="url(#gr)"/>
-                  {bestY&&<line x1={0} y1={bestY} x2={W} y2={bestY} stroke="#ffd12d" strokeWidth={1} strokeDasharray="4 4" opacity={0.5}/>}
-                  <path d={path} fill="none" stroke="#ff8c00" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
-                  {pts.map((p,i)=>{const isPR=chartData[i].rm1>=exBest&&exBest>0;return<circle key={i} cx={p.x} cy={p.y} r={i===pts.length-1?4:2.5} fill={isPR?'#ffd12d':i===pts.length-1?'#ff8c00':'#3a3a3a'}/>})}
-                </svg>
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#2e2e2e',marginTop:2}}>
-                  {chartData.map((d,i)=><span key={i}>{new Date(d.date).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>)}
-                </div>
-              </div>
-            )
-          })()}
-          <div style={{marginTop:14}}>
-            {[...chartData].reverse().map((d,i)=>{const isPR=d.rm1>0&&exBest>0&&d.rm1>=exBest;return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderTop:'1px solid #141414',fontSize:11}}><div style={{color:'#444'}}>{new Date(d.date).toLocaleDateString('es-ES',{day:'numeric',month:'short'}).toUpperCase()}</div><div style={{color:'#555'}}>{d.load}kg</div><div style={{color:isPR?'#ffd12d':'#7ed957',fontWeight:700}}>{isPR?'🏆':''} ~{d.rm1}kg</div></div>)})}
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:800,borderLeft:'3px solid #ff8c00',paddingLeft:10}}>{exName}</div>
+            {metric==='1rm'&&exBest>0&&<div style={{fontSize:11,color:'#ffd12d',fontWeight:800}}>🏆 PR: ~{exBest}kg</div>}
           </div>
+          {!chartData.length?(<div style={{color:'#222',fontSize:13,textAlign:'center',padding:30}}>Sin datos en este período</div>):(
+            <>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
+                {[
+                  {label:metric==='1rm'?'INICIO 1RM':'INICIO TONEL.',value:`${Math.round(yv(first))}${metric==='1rm'?'kg':'kg'}`,color:'#444'},
+                  {label:metric==='1rm'?'MEJOR 1RM':'MÁX TONEL.',value:`${metric==='1rm'?exBest||Math.max(...chartData.map(d=>d.rm1)):Math.round(Math.max(...chartData.map(d=>d.ton)))}kg`,color:'#ffd12d'},
+                  {label:'PROGRESO',value:`${delta>=0?'+':''}${Math.round(delta)}${yUnit}`,color:delta>=0?'#7ed957':'#ff4444'},
+                  {label:'TENDENCIA',value:trendLabel,color:trendColor}
+                ].map(({label,value,color})=>(
+                  <div key={label} style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'10px 6px',textAlign:'center'}}>
+                    <div style={{fontSize:8,letterSpacing:2,color:'#2e2e2e',fontWeight:800}}>{label}</div>
+                    <div style={{fontSize:18,fontWeight:900,color,marginTop:3}}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              {chartData.length>=2&&(()=>{
+                const vals=chartData.map(yv).filter(v=>v>0)
+                const ref=metric==='1rm'?exBest:0
+                const mn=Math.min(...vals)*0.92, mx=Math.max(ref,...vals)*1.06
+                const W=320,H=65
+                const pts=chartData.map((d,i)=>({x:(i/(chartData.length-1))*W,y:H-((yv(d)-mn)/(mx-mn||1))*H}))
+                const path=pts.map((p,i)=>`${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+                const area=path+` L${W},${H} L0,${H} Z`
+                const refY=ref>0?H-((ref-mn)/(mx-mn||1))*H:null
+                return(
+                  <div style={{background:'#0a0a0a',borderRadius:8,padding:'12px 8px 6px'}}>
+                    <div style={{fontSize:8,color:'#282828',letterSpacing:3,marginBottom:4}}>{metric==='1rm'?'1RM ESTIMADO — EPLEY':'TONELAJE POR SESIÓN'}</div>
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:65}}>
+                      <defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff8c00" stopOpacity="0.2"/><stop offset="100%" stopColor="#ff8c00" stopOpacity="0"/></linearGradient></defs>
+                      <path d={area} fill="url(#gr)"/>
+                      {refY!=null&&<line x1={0} y1={refY} x2={W} y2={refY} stroke="#ffd12d" strokeWidth={1} strokeDasharray="4 4" opacity={0.5}/>}
+                      <path d={path} fill="none" stroke="#ff8c00" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+                      {pts.map((p,i)=>{const isPR=metric==='1rm'&&chartData[i].rm1>=exBest&&exBest>0;return<circle key={i} cx={p.x} cy={p.y} r={i===pts.length-1?4:2.5} fill={isPR?'#ffd12d':i===pts.length-1?'#ff8c00':'#3a3a3a'}/>})}
+                    </svg>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#2e2e2e',marginTop:2}}>
+                      <span>{parseLocalDate(chartData[0].date).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>
+                      {chartData.length>2&&<span style={{color:'#1e1e1e'}}>{chartData.length} sesiones</span>}
+                      <span>{parseLocalDate(chartData[chartData.length-1].date).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>
+                    </div>
+                  </div>
+                )
+              })()}
+              <div style={{marginTop:14}}>
+                {[...chartData].reverse().map((d,i)=>{
+                  const isPR=metric==='1rm'&&d.rm1>0&&exBest>0&&d.rm1>=exBest
+                  return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderTop:'1px solid #141414',fontSize:11,alignItems:'center'}}>
+                    <div style={{color:'#444'}}>{parseLocalDate(d.date).toLocaleDateString('es-ES',{day:'numeric',month:'short'}).toUpperCase()}</div>
+                    <div style={{color:isPR?'#ffd12d':'#7ed957',fontWeight:700}}>{isPR?'🏆':''} {Math.round(yv(d))}{metric==='1rm'?' kg':' kg vol'}</div>
+                  </div>)
+                })}
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
