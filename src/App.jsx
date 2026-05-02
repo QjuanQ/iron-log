@@ -74,7 +74,7 @@ const sessionWithPrevLoads = (d, prevSess) => {
   const base = defaultSession(d)
   if(!prevSess) return base
   return {...base, exercises: base.exercises.map((ex,i)=>{
-    const prev = prevSess.exercises[i]
+    const prev = prevSess.exercises.find(e=>e.name===ex.name) ?? prevSess.exercises[i]
     if(!prev) return ex
     const doneSets = prev.sets.filter(s=>s.done&&s.load)
     const sourceSets = doneSets.length ? doneSets : prev.sets.filter(s=>s.load)
