@@ -70,6 +70,21 @@ const EMPTY_SET = {load:'',reps:'',rir:'',done:false}
 const localDateStr = () => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 const parseLocalDate = s => new Date(s+'T00:00:00')
 const defaultSession = d => ({date:localDateStr(),exercises:EXERCISES[d].map(name=>({name,sets:[{...EMPTY_SET}],notes:'',photo:null}))})
+const sessionWithPrevLoads = (d, prevSess) => {
+  const base = defaultSession(d)
+  if(!prevSess) return base
+  return {...base, exercises: base.exercises.map((ex,i)=>{
+    const prev = prevSess.exercises[i]
+    if(!prev) return ex
+    const loads = prev.sets.filter(s=>s.done&&s.load).map(s=>parseFloat(s.load)).filter(v=>v>0)
+    if(!loads.length) return ex
+    const freq={}; loads.forEach(v=>{freq[v]=(freq[v]||0)+1})
+    const maxFreq=Math.max(...Object.values(freq))
+    const modes=Object.keys(freq).filter(k=>freq[k]===maxFreq).map(Number)
+    const load=modes.length===1?modes[0]:Math.round(loads.reduce((a,b)=>a+b,0)/loads.length*10)/10
+    return {...ex, sets:[{...EMPTY_SET, load:String(load)}]}
+  })}
+}
 const calcAllTimeBests = sessions => { const b={}; for(const d of[0,1])for(const s of(sessions[d]||[]))for(const ex of s.exercises){const best=Math.max(...ex.sets.map(s=>calc1RM(s.load,s.reps)||0));if(best>0&&(!b[ex.name]||best>b[ex.name]))b[ex.name]=best;} return b }
 function evaluateProgression(exerciseList, userProgConfig) {
   const results = {}
@@ -191,7 +206,7 @@ function BodyMuscleMap({ name }) {
 }
 
 /* ═══════════ SET ROW ═══════════ */
-function SetRow({ s, si, onChange, onDelete, onDone, onUndone, exName, allTimeBests }) {
+function SetRow({ s, si, onChange, onDelete, onDone, onUndone, exName, allTimeBests, loadIncrement=2.5 }) {
   const rm = calc1RM(s.load, s.reps)
   const isPR = rm && allTimeBests[exName] && rm >= allTimeBests[exName]
   const canDone = !!(s.load && s.reps)
@@ -206,47 +221,47 @@ function SetRow({ s, si, onChange, onDelete, onDone, onUndone, exName, allTimeBe
         </div>
         {/* CARGA */}
         <div style={{display:'flex',gap:3,alignItems:'center',background:'#131313',border:'1px solid #222',borderRadius:6,padding:'3px 2px'}}>
-          <button onClick={()=>!s.done&&onChange('load',String(Math.max(0,(parseFloat(s.load)||0)-2.5)))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>−</button>
+          <button onClick={()=>!s.done&&onChange('load',String(Math.max(0,Math.round(((parseFloat(s.load)||0)-(loadIncrement||2.5))*100)/100)))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>−</button>
           <div style={{flex:1,textAlign:'center',minWidth:0}}>
-            <div style={{fontSize:9,color:'#ff8c0099',letterSpacing:1,fontWeight:800,marginBottom:1}}>CARGA</div>
+            <div style={{fontSize:11,color:'#ff8c00bb',letterSpacing:1,fontWeight:800,marginBottom:1}}>CARGA</div>
             <input type="number" inputMode="decimal" value={s.load} onChange={e=>!s.done&&onChange('load',e.target.value)} placeholder="—" readOnly={s.done} style={{...cI,color:s.done?'#4caf50':'#ff8c00'}}/>
-            <div style={{fontSize:8,color:'#ff8c0055',fontWeight:700,marginTop:1}}>kg</div>
+            <div style={{fontSize:10,color:'#ff8c0099',fontWeight:700,marginTop:1}}>kg</div>
           </div>
-          <button onClick={()=>!s.done&&onChange('load',String((parseFloat(s.load)||0)+2.5))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>+</button>
+          <button onClick={()=>!s.done&&onChange('load',String(Math.round(((parseFloat(s.load)||0)+(loadIncrement||2.5))*100)/100))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>+</button>
         </div>
         {/* REPS */}
         <div style={{display:'flex',gap:3,alignItems:'center',background:'#131313',border:'1px solid #222',borderRadius:6,padding:'3px 2px'}}>
           <button onClick={()=>!s.done&&onChange('reps',String(Math.max(1,(parseInt(s.reps)||0)-1)))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>−</button>
           <div style={{flex:1,textAlign:'center',minWidth:0}}>
-            <div style={{fontSize:9,color:'#888',letterSpacing:1,fontWeight:800,marginBottom:1}}>REPS</div>
+            <div style={{fontSize:11,color:'#888',letterSpacing:1,fontWeight:800,marginBottom:1}}>REPS</div>
             <input type="number" inputMode="numeric" value={s.reps} onChange={e=>!s.done&&onChange('reps',e.target.value)} placeholder="—" readOnly={s.done} style={{...cI,color:s.done?'#4caf50':'#f0ece3'}}/>
-            <div style={{fontSize:8,color:'#555',fontWeight:700,marginTop:1}}>reps</div>
+            <div style={{fontSize:10,color:'#888',fontWeight:700,marginTop:1}}>reps</div>
           </div>
           <button onClick={()=>!s.done&&onChange('reps',String((parseInt(s.reps)||0)+1))} style={{...mBt,width:28,height:40,opacity:s.done?0.2:1,fontSize:18}}>+</button>
         </div>
         {/* ✓ HECHA */}
         {s.done ? (
           <button onClick={onUndone} style={{height:52,background:'#1a4a1a',color:'#4caf50',border:'2px solid #4caf50',borderRadius:6,cursor:'pointer',fontSize:22,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:1,width:'100%'}}>
-            <span>✓</span><span style={{fontSize:8,letterSpacing:1,fontWeight:800}}>HECHA</span>
+            <span>✓</span><span style={{fontSize:10,letterSpacing:1,fontWeight:800}}>HECHA</span>
           </button>
         ) : (
           <button onClick={canDone?onDone:undefined} style={{height:52,background:canDone?'#ff8c00':'#1a1a1a',color:canDone?'#080808':'#2a2a2a',border:`2px solid ${canDone?'#ff8c00':'#252525'}`,borderRadius:6,cursor:canDone?'pointer':'default',fontSize:canDone?22:16,fontWeight:900,display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:1,width:'100%',transition:'all 0.15s'}}>
-            <span>{canDone?'✓':'○'}</span><span style={{fontSize:8,letterSpacing:1,fontWeight:800}}>{canDone?'HECHA':'—'}</span>
+            <span>{canDone?'✓':'○'}</span><span style={{fontSize:10,letterSpacing:1,fontWeight:800}}>{canDone?'HECHA':'—'}</span>
           </button>
         )}
       </div>
       {/* RIR + 1RM */}
       <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 8px 7px',borderTop:`1px solid ${s.done?'#1a2e1a':'#141414'}`}}>
-        <div style={{fontSize:7,color:'#2e2e2e',letterSpacing:1,fontWeight:700,flexShrink:0}}>RIR</div>
+        <div style={{fontSize:10,color:'#777',letterSpacing:1,fontWeight:700,flexShrink:0}}>RIR</div>
         {[['0','#ff4444'],['1','#ff8c00'],['2','#ffd12d'],['3','#7ed957'],['4+','#4caf50']].map(([v,col]) => {
           const active = s.rir === v
-          return <button key={v} onClick={()=>onChange('rir',active?'':v)} style={{flex:1,height:26,background:active?col:'#161616',color:active?'#080808':col,border:`1.5px solid ${active?col:'#252525'}`,borderRadius:4,cursor:'pointer',fontSize:11,fontWeight:900,fontFamily:'inherit',transition:'all 0.12s',minWidth:0}}>{v}</button>
+          return <button key={v} onClick={()=>!s.done&&onChange('rir',active?'':v)} style={{flex:1,height:26,background:active?col:'#161616',color:active?'#080808':col,border:`1.5px solid ${active?col:'#252525'}`,borderRadius:4,cursor:s.done?'default':'pointer',fontSize:11,fontWeight:900,fontFamily:'inherit',transition:'all 0.12s',minWidth:0,opacity:s.done?0.4:1}}>{v}</button>
         })}
         <div style={{textAlign:'center',flexShrink:0,minWidth:50}}>
-          <div style={{fontSize:7,color:'#2e2e2e',letterSpacing:1,fontWeight:700}}>1RM</div>
-          <div style={{fontSize:12,fontWeight:800,color:isPR?'#ffd12d':rm?'#7ed957':'#333',marginTop:1}}>{isPR?'🏆':''}{rm?`${rm}kg`:'—'}</div>
+          <div style={{fontSize:10,color:'#777',letterSpacing:1,fontWeight:700}}>1RM</div>
+          <div style={{fontSize:12,fontWeight:800,color:isPR?'#ffd12d':rm?'#7ed957':'#666',marginTop:1}}>{isPR?'🏆':''}{rm?`${rm}kg`:'—'}</div>
         </div>
-        <button onClick={onDelete} style={{background:'transparent',border:'none',color:'#2a2a2a',fontSize:15,cursor:'pointer',flexShrink:0,padding:'0 2px'}}>✕</button>
+        <button onClick={onDelete} style={{background:'transparent',border:'none',color:'#555',fontSize:15,cursor:'pointer',flexShrink:0,padding:'0 2px'}}>✕</button>
       </div>
     </div>
   )
@@ -272,14 +287,14 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
         <div style={{width:24,height:24,flexShrink:0,background:done.length>0?leftCol:'#1c1c1c',color:done.length>0?'#080808':'#3a3a3a',borderRadius:4,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900}}>{isNewPR?'🏆':ei+1}</div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:13,fontWeight:800,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ex.name}</div>
-          <div style={{fontSize:9,color:'#383838',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+          <div style={{fontSize:9,color:'#777',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
             {primaryMuscles.join(' · ')}
-            {!expanded&&done.length>0&&<span style={{color:'#484848'}}> · {done.length} ✓{best1RM>0?` · 1RM ~${best1RM}kg`:''}</span>}
+            {!expanded&&done.length>0&&<span style={{color:'#888'}}> · {done.length} ✓{best1RM>0?` · 1RM ~${best1RM}kg`:''}</span>}
           </div>
           {stagnant?.stagnant&&<div style={{fontSize:9,color:'#ffd12d',background:'#2a2000',borderRadius:3,padding:'1px 5px',marginTop:3,display:'inline-block'}}>⚠️ Sin mejora en 3 sesiones</div>}
         </div>
         {!expanded&&done.length>0&&(()=>{const last=ex.sets.filter(s=>s.done).at(-1);return last?<div style={{fontSize:11,color:'#ff8c00',fontWeight:700,flexShrink:0}}>{last.load}kg×{last.reps}</div>:null})()}
-        <div style={{color:'#2e2e2e',fontSize:13,flexShrink:0}}>{expanded?'▲':'▼'}</div>
+        <div style={{color:'#666',fontSize:13,flexShrink:0}}>{expanded?'▲':'▼'}</div>
       </div>
       {expanded && (
         <div style={{borderTop:'1px solid #181818',padding:'10px 12px 14px'}}>
@@ -287,7 +302,7 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10}}>
             <div style={{display:'flex',alignItems:'center',gap:6,background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:5,padding:'5px 8px',flex:1}}>
               <span style={{fontSize:10,color:'#ff8c00',fontWeight:800,letterSpacing:1}}>{cfg.setsTarget}×{cfg.repsMin}-{cfg.repsMax}</span>
-              <span style={{fontSize:9,color:'#383838'}}>· +{cfg.loadIncrement}kg · RIR≥{cfg.rirTarget}</span>
+              <span style={{fontSize:9,color:'#666'}}>· +{cfg.loadIncrement}kg · RIR≥{cfg.rirTarget}</span>
             </div>
             <button onClick={e=>{e.stopPropagation();onConfigEdit()}} style={{background:'#1a1a1a',border:'1px solid #2a2a2a',borderRadius:5,padding:'5px 8px',fontSize:13,cursor:'pointer',color:'#555'}}>⚙️</button>
           </div>
@@ -302,7 +317,7 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
               </div>
             </div>
           )}
-          <button onClick={onToggleTechnique} style={{width:'100%',padding:'7px',background:showTechnique?'#1a1a1a':'transparent',color:showTechnique?'#ff8c00':'#383838',border:`1px solid ${showTechnique?'#ff8c00':'#222'}`,borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1,marginBottom:10}}>
+          <button onClick={onToggleTechnique} style={{width:'100%',padding:'7px',background:showTechnique?'#1a1a1a':'transparent',color:showTechnique?'#ff8c00':'#666',border:`1px solid ${showTechnique?'#ff8c00':'#222'}`,borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1,marginBottom:10}}>
             {showTechnique?'▲ OCULTAR TÉCNICA':'🎯 VER TÉCNICA Y MÚSCULOS'}
           </button>
           {showTechnique && (
@@ -311,14 +326,14 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
                 {SvgComp?<SvgComp/>:<div style={{width:'100%',height:'100%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20}}>🏋️</div>}
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:8,letterSpacing:2,color:'#3a3a3a',fontWeight:800,marginBottom:4}}>ACTIVACIÓN MUSCULAR</div>
+                <div style={{fontSize:10,letterSpacing:2,color:'#666',fontWeight:800,marginBottom:4}}>ACTIVACIÓN MUSCULAR</div>
                 <div style={{height:108,overflow:'hidden'}}><BodyMuscleMap name={ex.name}/></div>
               </div>
             </div>
           )}
           {prevEx&&prevEx.sets.some(s=>s.load&&s.reps)&&(
             <div style={{background:'#090909',border:'1px solid #181818',borderRadius:6,padding:'8px 10px',marginBottom:10}}>
-              <div style={{fontSize:8,letterSpacing:3,color:'#ff8c00',fontWeight:800,marginBottom:5}}>↺ SESIÓN ANTERIOR</div>
+              <div style={{fontSize:10,letterSpacing:3,color:'#ff8c00',fontWeight:800,marginBottom:5}}>↺ SESIÓN ANTERIOR</div>
               <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
                 {prevEx.sets.filter(s=>s.load&&s.reps).map((s,i)=>(
                   <span key={i} style={{background:'#161616',borderRadius:4,padding:'3px 7px',fontSize:11,color:'#777'}}>
@@ -327,24 +342,24 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
                 ))}
               </div>
               {Math.max(...prevEx.sets.map(s=>calc1RM(s.load,s.reps)||0))>0&&(
-                <div style={{fontSize:10,color:'#383838',marginTop:4}}>1RM ant: <span style={{color:'#7ed957'}}>~{Math.max(...prevEx.sets.map(s=>calc1RM(s.load,s.reps)||0))}kg</span></div>
+                <div style={{fontSize:10,color:'#666',marginTop:4}}>1RM ant: <span style={{color:'#7ed957'}}>~{Math.max(...prevEx.sets.map(s=>calc1RM(s.load,s.reps)||0))}kg</span></div>
               )}
             </div>
           )}
-          <div style={{fontSize:8,color:'#2a2a2a',letterSpacing:1,fontWeight:700,marginBottom:6}}>SERIES — rellena carga y reps, luego pulsa ✓</div>
+          <div style={{fontSize:10,color:'#666',letterSpacing:1,fontWeight:700,marginBottom:6}}>SERIES — rellena carga y reps, luego pulsa ✓</div>
           {ex.sets.map((s,si)=>(
-            <SetRow key={`${si}-${s.load}-${s.reps}-${s.done}`} s={s} si={si} onChange={(f,v)=>updateSet(si,f,v)} onDelete={()=>removeSet(si)} onDone={()=>onSetDone(si)} onUndone={()=>onSetUndone(si)} exName={ex.name} allTimeBests={allTimeBests}/>
+            <SetRow key={`${si}-${s.load}-${s.reps}-${s.done}`} s={s} si={si} onChange={(f,v)=>updateSet(si,f,v)} onDelete={()=>removeSet(si)} onDone={()=>onSetDone(si)} onUndone={()=>onSetUndone(si)} exName={ex.name} allTimeBests={allTimeBests} loadIncrement={cfg.loadIncrement}/>
           ))}
           {done.length >= cfg.setsTarget && (
             <div style={{textAlign:'center',padding:'7px 10px',marginBottom:6,background:'#0a1a0a',border:'1px solid #1e4a1e',borderRadius:6,fontSize:11,fontWeight:900,color:'#4caf50',letterSpacing:2}}>✓ OBJETIVO</div>
           )}
           <div style={{display:'flex',gap:7,marginTop:4}}>
-            <button onClick={addSet} style={{flex:1,padding:'9px',background:'transparent',color:'#333',border:'1.5px dashed #1e1e1e',borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>+ SERIE EXTRA</button>
+            <button onClick={addSet} style={{flex:1,padding:'9px',background:'transparent',color:'#666',border:'1.5px dashed #333',borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>+ SERIE EXTRA</button>
             <button onClick={()=>onRest(restDuration)} style={{padding:'10px 16px',background:'#161616',color:'#ff8c00',border:'1.5px solid #222',borderRadius:6,fontSize:16,cursor:'pointer'}}>⏱</button>
           </div>
           <textarea value={ex.notes} rows={2} onChange={e=>onChange(ex=>({...ex,notes:e.target.value}))} placeholder="Técnica, sensaciones..." style={{width:'100%',background:'#090909',border:'1.5px solid #1c1c1c',borderRadius:6,color:'#aaa',padding:'8px 10px',fontSize:12,outline:'none',resize:'none',lineHeight:1.5,marginTop:10,boxSizing:'border-box',fontFamily:'inherit'}}/>
           <div style={{marginTop:8}}>
-            <label style={{display:'flex',alignItems:'center',gap:8,background:'#090909',border:'1.5px dashed #1c1c1c',borderRadius:6,padding:'9px 12px',cursor:'pointer',fontSize:11,color:'#383838'}}>
+            <label style={{display:'flex',alignItems:'center',gap:8,background:'#090909',border:'1.5px dashed #2a2a2a',borderRadius:6,padding:'9px 12px',cursor:'pointer',fontSize:11,color:'#666'}}>
               📷 {ex.photo?'Cambiar foto':'Añadir foto de técnica'}
               <input type="file" accept="image/*" onChange={handlePhoto} style={{display:'none'}}/>
             </label>
@@ -362,7 +377,7 @@ function ProgressionSetup({exerciseName, config, onSave, onClose}) {
   const upd = (k,v) => setCfg(p=>({...p,[k]:v}))
   const stepper = (label, key, min, max) => (
     <div style={{marginBottom:14}}>
-      <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>{label}</div>
+      <div style={{fontSize:11,color:'#777',letterSpacing:2,fontWeight:800,marginBottom:6}}>{label}</div>
       <div style={{display:'flex',alignItems:'center',gap:10}}>
         <button onClick={()=>upd(key,Math.max(min,cfg[key]-1))} style={{width:38,height:38,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:6,fontSize:20,cursor:'pointer',fontWeight:900}}>−</button>
         <div style={{flex:1,textAlign:'center',fontSize:24,fontWeight:900,color:'#f0ece3'}}>{cfg[key]}</div>
@@ -380,7 +395,7 @@ function ProgressionSetup({exerciseName, config, onSave, onClose}) {
           <div style={{fontSize:9,color:'#555',letterSpacing:2,fontWeight:800,marginBottom:6}}>RANGO DE REPS</div>
           <div style={{display:'flex',gap:10,alignItems:'center'}}>
             <div style={{flex:1}}>
-              <div style={{fontSize:8,color:'#444',marginBottom:4,textAlign:'center'}}>MÍN</div>
+              <div style={{fontSize:10,color:'#666',marginBottom:4,textAlign:'center'}}>MÍN</div>
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <button onClick={()=>upd('repsMin',Math.max(1,cfg.repsMin-1))} style={{width:32,height:32,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:5,fontSize:18,cursor:'pointer',fontWeight:900}}>−</button>
                 <div style={{flex:1,textAlign:'center',fontSize:20,fontWeight:900,color:'#f0ece3'}}>{cfg.repsMin}</div>
@@ -389,7 +404,7 @@ function ProgressionSetup({exerciseName, config, onSave, onClose}) {
             </div>
             <div style={{color:'#333',fontSize:18,fontWeight:900}}>—</div>
             <div style={{flex:1}}>
-              <div style={{fontSize:8,color:'#444',marginBottom:4,textAlign:'center'}}>MÁX</div>
+              <div style={{fontSize:10,color:'#666',marginBottom:4,textAlign:'center'}}>MÁX</div>
               <div style={{display:'flex',alignItems:'center',gap:6}}>
                 <button onClick={()=>upd('repsMax',Math.max(cfg.repsMin+1,cfg.repsMax-1))} style={{width:32,height:32,background:'#1a1a1a',color:'#ff8c00',border:'1px solid #2a2a2a',borderRadius:5,fontSize:18,cursor:'pointer',fontWeight:900}}>−</button>
                 <div style={{flex:1,textAlign:'center',fontSize:20,fontWeight:900,color:'#f0ece3'}}>{cfg.repsMax}</div>
@@ -425,7 +440,7 @@ function ProgressionSetup({exerciseName, config, onSave, onClose}) {
 
 /* ═══════════ HELP MODAL ═══════════ */
 function HelpModal({ onClose }) {
-  const S = ({children}) => <div style={{fontSize:8,letterSpacing:3,color:'#ff8c00',fontWeight:900,marginTop:20,marginBottom:8}}>{children}</div>
+  const S = ({children}) => <div style={{fontSize:10,letterSpacing:3,color:'#ff8c00',fontWeight:900,marginTop:20,marginBottom:8}}>{children}</div>
   const R = ({icon,text,sub}) => (
     <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:8}}>
       <div style={{fontSize:14,flexShrink:0,width:20,textAlign:'center',marginTop:1}}>{icon}</div>
@@ -443,7 +458,7 @@ function HelpModal({ onClose }) {
           <button onClick={onClose} style={{background:'transparent',border:'none',color:'#555',fontSize:18,cursor:'pointer',padding:'0 2px'}}>✕</button>
         </div>
         <div style={{fontSize:13,fontWeight:800,color:'#f0ece3',marginBottom:2}}>Guía rápida</div>
-        <div style={{fontSize:11,color:'#444',marginBottom:4}}>Toca fuera para cerrar</div>
+        <div style={{fontSize:11,color:'#666',marginBottom:4}}>Toca fuera para cerrar</div>
 
         <S>SESIÓN DIARIA</S>
         <R icon="1️⃣" text="Selecciona Día A o Día B" sub="Alterna entre los dos días de entreno"/>
@@ -530,7 +545,7 @@ function VolumeView({ sessions }) {
       <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14,background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:'10px 12px'}}>
         <button onClick={()=>setWeekOffset(w=>w-1)} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:18,cursor:'pointer',padding:'0 4px'}}>‹</button>
         <div style={{flex:1,textAlign:'center'}}>
-          <div style={{fontSize:10,color:'#444',letterSpacing:2,fontWeight:700}}>SEMANA</div>
+          <div style={{fontSize:10,color:'#666',letterSpacing:2,fontWeight:700}}>SEMANA</div>
           <div style={{fontSize:14,fontWeight:800,color:weekOffset===0?'#ff8c00':'#f0ece3'}}>{weekOffset===0?'ACTUAL':weekOffset===-1?'ANTERIOR':`hace ${Math.abs(weekOffset)} sem.`}</div>
         </div>
         <button onClick={()=>setWeekOffset(w=>Math.min(0,w+1))} style={{background:'transparent',border:'none',color:weekOffset===0?'#333':'#ff8c00',fontSize:18,cursor:'pointer',padding:'0 4px'}}>›</button>
@@ -538,7 +553,7 @@ function VolumeView({ sessions }) {
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:14}}>
         {[{label:'TONELAJE',value:`${Math.round(totalT/100)/10}t`,color:'#ff8c00'},{label:'VS ANT.',value:totalT>0&&prevT>0?`${Math.round((totalT/prevT-1)*100)}%`:'—',color:'#7ed957'},{label:'SESIONES',value:Object.values(sessions).flat().filter(s=>getWeekYear(s.date)===tw).length,color:'#f0ece3'}].map(({label,value,color})=>(
           <div key={label} style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'10px 6px',textAlign:'center'}}>
-            <div style={{fontSize:8,letterSpacing:2,color:'#2e2e2e',fontWeight:800}}>{label}</div>
+            <div style={{fontSize:10,letterSpacing:2,color:'#666',fontWeight:800}}>{label}</div>
             <div style={{fontSize:18,fontWeight:900,color,marginTop:3}}>{value}</div>
           </div>
         ))}
@@ -561,7 +576,7 @@ function VolumeView({ sessions }) {
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 {delta!==0&&ps>0&&<span style={{fontSize:10,color:delta>0?'#7ed957':'#ff6b6b',fontWeight:700}}>{delta>0?`+${delta.toFixed(1)}`:`${delta.toFixed(1)}`}</span>}
                 <span style={{fontSize:16,fontWeight:900,color:zc}}>{sets===0?'—':sets}</span>
-                <span style={{fontSize:9,color:'#444'}}>series</span>
+                <span style={{fontSize:9,color:'#666'}}>series</span>
               </div>
             </div>
             <div style={{position:'relative',height:8,background:'#141414',borderRadius:4,overflow:'hidden'}}>
@@ -571,9 +586,9 @@ function VolumeView({ sessions }) {
               {sets>0&&<div style={{position:'absolute',left:0,top:0,height:'100%',borderRadius:4,background:zc,width:`${bp(sets)}%`,transition:'width 0.6s ease',zIndex:3}}/>}
             </div>
             <div style={{position:'relative',height:14,marginTop:2}}>
-              <div style={{position:'absolute',left:`${bp(t.mev)}%`,fontSize:7,color:'#383838',transform:'translateX(-50%)'}}>MEV{t.mev}</div>
-              <div style={{position:'absolute',left:`${(bp(t.mavL)+bp(t.mavH))/2}%`,fontSize:7,color:'#2e3e1e',transform:'translateX(-50%)'}}>MAV</div>
-              <div style={{position:'absolute',left:`${bp(t.mrv)}%`,fontSize:7,color:'#3e1e1e',transform:'translateX(-50%)'}}>MRV{t.mrv}</div>
+              <div style={{position:'absolute',left:`${bp(t.mev)}%`,fontSize:9,color:'#555',transform:'translateX(-50%)'}}>MEV{t.mev}</div>
+              <div style={{position:'absolute',left:`${(bp(t.mavL)+bp(t.mavH))/2}%`,fontSize:9,color:'#4a5e3a',transform:'translateX(-50%)'}}>MAV</div>
+              <div style={{position:'absolute',left:`${bp(t.mrv)}%`,fontSize:9,color:'#6e3a3a',transform:'translateX(-50%)'}}>MRV{t.mrv}</div>
             </div>
           </div>
         )
@@ -583,11 +598,15 @@ function VolumeView({ sessions }) {
 }
 
 /* ═══════════ PROGRESS VIEW ═══════════ */
-function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }) {
+function ProgressView({ allTimeBests, allSessions }) {
+  const [viewDay, setViewDay] = useState(0)
   const [sel, setSel] = useState(0)
   const [range, setRange] = useState('3m')
   const [metric, setMetric] = useState('1rm')
   const [showGlobal, setShowGlobal] = useState(false)
+
+  const sessions = allSessions[viewDay] || []
+  const exercises = EXERCISES[viewDay]
 
   const cutoff = (() => { const d=new Date(),mo={'1m':1,'3m':3,'6m':6}[range]; d.setMonth(d.getMonth()-mo); return d })()
   const exName = exercises[sel]
@@ -623,6 +642,14 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
 
   return (
     <div style={{padding:12}}>
+      {/* DAY SELECTOR */}
+      <div style={{display:'flex',gap:5,marginBottom:10}}>
+        {['DÍA A','DÍA B'].map((label,i)=>(
+          <button key={i} onClick={()=>{setViewDay(i);setSel(0)}} style={{flex:1,padding:'9px 8px',background:viewDay===i?'#161616':'transparent',border:`2px solid ${viewDay===i?'#ff8c00':'#1e1e1e'}`,borderRadius:6,color:viewDay===i?'#ff8c00':'#555',fontSize:13,fontWeight:900,letterSpacing:3,cursor:'pointer',fontFamily:'inherit'}}>
+            {label}
+          </button>
+        ))}
+      </div>
       {/* CONTROLS */}
       <div style={{display:'flex',gap:6,marginBottom:10}}>
         <div style={{display:'flex',gap:3,flex:1}}>
@@ -639,24 +666,24 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
       {showGlobal ? (
         /* GLOBAL VIEW */
         <div>
-          <div style={{fontSize:9,color:'#444',letterSpacing:3,fontWeight:800,marginBottom:10}}>TODOS LOS EJERCICIOS — {range==='1m'?'1 MES':range==='3m'?'3 MESES':'6 MESES'} — {metric==='1rm'?'1RM EST.':'TONELAJE'}</div>
+          <div style={{fontSize:9,color:'#666',letterSpacing:3,fontWeight:800,marginBottom:10}}>TODOS LOS EJERCICIOS — {range==='1m'?'1 MES':range==='3m'?'3 MESES':'6 MESES'} — {metric==='1rm'?'1RM EST.':'TONELAJE'}</div>
           {[0,1].map(d=>(
             <div key={d} style={{marginBottom:16}}>
               <div style={{fontSize:9,color:'#ff8c00',letterSpacing:3,fontWeight:900,marginBottom:6}}>DÍA {d===0?'A':'B'}</div>
               {globalStats.filter(g=>g.d===d).map((g,i)=>{
                 if(g.noData)return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderTop:'1px solid #111',alignItems:'center'}}>
-                  <div style={{fontSize:11,color:'#2a2a2a',flex:1}}>{g.name}</div>
-                  <div style={{fontSize:10,color:'#1e1e1e'}}>Sin datos</div>
+                  <div style={{fontSize:11,color:'#666',flex:1}}>{g.name}</div>
+                  <div style={{fontSize:10,color:'#555'}}>Sin datos</div>
                 </div>)
                 const tc=g.trend===null?'#555':g.trend>0?'#4caf50':g.trend<0?'#ff4444':'#ffd12d'
                 const ti=g.trend===null?'—':g.trend>0?`↗ +${g.trend}`:g.trend<0?`↘ ${g.trend}`:'→'
                 return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderTop:'1px solid #111',alignItems:'center',gap:8}}>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:11,color:'#bbb',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.name}</div>
-                    <div style={{fontSize:9,color:'#333',marginTop:1}}>{g.sessions} sesiones</div>
+                    <div style={{fontSize:9,color:'#666',marginTop:1}}>{g.sessions} sesiones</div>
                   </div>
                   <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontSize:13,fontWeight:900,color:'#f0ece3'}}>{Math.round(g.current)}<span style={{fontSize:9,color:'#444',fontWeight:400}}>{metric==='1rm'?' kg':' kg'}</span></div>
+                    <div style={{fontSize:13,fontWeight:900,color:'#f0ece3'}}>{Math.round(g.current)}<span style={{fontSize:9,color:'#666',fontWeight:400}}>{metric==='1rm'?' kg':' kg'}</span></div>
                     <div style={{fontSize:10,fontWeight:700,color:tc}}>{ti}</div>
                   </div>
                 </div>)
@@ -669,8 +696,8 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
         <>
           <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:12}}>
             {exercises.map((name,i)=>{
-              const stag=allSessions?detectStagnation(allSessions,dayIdx??0,name):{stagnant:false}
-              return(<button key={i} onClick={()=>setSel(i)} style={{padding:'6px 9px',background:sel===i?'#ff8c00':'#0e0e0e',color:sel===i?'#080808':'#3a3a3a',border:`1px solid ${sel===i?'#ff8c00':'#1a1a1a'}`,borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
+              const stag=allSessions?detectStagnation(allSessions,viewDay,name):{stagnant:false}
+              return(<button key={i} onClick={()=>setSel(i)} style={{padding:'6px 9px',background:sel===i?'#ff8c00':'#0e0e0e',color:sel===i?'#080808':'#777',border:`1px solid ${sel===i?'#ff8c00':'#1a1a1a'}`,borderRadius:4,fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
                 {name.split(' ').slice(0,2).join(' ')}
                 {stag.stagnant&&<span style={{position:'absolute',top:2,right:2,width:5,height:5,borderRadius:'50%',background:'#ff4444',display:'block'}}/>}
               </button>)
@@ -684,13 +711,13 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
             <>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:14}}>
                 {[
-                  {label:metric==='1rm'?'INICIO 1RM':'INICIO TONEL.',value:`${Math.round(yv(first))}${metric==='1rm'?'kg':'kg'}`,color:'#444'},
+                  {label:metric==='1rm'?'INICIO 1RM':'INICIO TONEL.',value:`${Math.round(yv(first))}${metric==='1rm'?'kg':'kg'}`,color:'#888'},
                   {label:metric==='1rm'?'MEJOR 1RM':'MÁX TONEL.',value:`${metric==='1rm'?exBest||Math.max(...chartData.map(d=>d.rm1)):Math.round(Math.max(...chartData.map(d=>d.ton)))}kg`,color:'#ffd12d'},
                   {label:'PROGRESO',value:`${delta>=0?'+':''}${Math.round(delta)}${yUnit}`,color:delta>=0?'#7ed957':'#ff4444'},
                   {label:'TENDENCIA',value:trendLabel,color:trendColor}
                 ].map(({label,value,color})=>(
                   <div key={label} style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'10px 6px',textAlign:'center'}}>
-                    <div style={{fontSize:8,letterSpacing:2,color:'#2e2e2e',fontWeight:800}}>{label}</div>
+                    <div style={{fontSize:10,letterSpacing:2,color:'#666',fontWeight:800}}>{label}</div>
                     <div style={{fontSize:18,fontWeight:900,color,marginTop:3}}>{value}</div>
                   </div>
                 ))}
@@ -706,7 +733,7 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
                 const refY=ref>0?H-((ref-mn)/(mx-mn||1))*H:null
                 return(
                   <div style={{background:'#0a0a0a',borderRadius:8,padding:'12px 8px 6px'}}>
-                    <div style={{fontSize:8,color:'#282828',letterSpacing:3,marginBottom:4}}>{metric==='1rm'?'1RM ESTIMADO — EPLEY':'TONELAJE POR SESIÓN'}</div>
+                    <div style={{fontSize:9,color:'#666',letterSpacing:3,marginBottom:4}}>{metric==='1rm'?'1RM ESTIMADO — EPLEY':'TONELAJE POR SESIÓN'}</div>
                     <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:65}}>
                       <defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#ff8c00" stopOpacity="0.2"/><stop offset="100%" stopColor="#ff8c00" stopOpacity="0"/></linearGradient></defs>
                       <path d={area} fill="url(#gr)"/>
@@ -714,9 +741,9 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
                       <path d={path} fill="none" stroke="#ff8c00" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
                       {pts.map((p,i)=>{const isPR=metric==='1rm'&&chartData[i].rm1>=exBest&&exBest>0;return<circle key={i} cx={p.x} cy={p.y} r={i===pts.length-1?4:2.5} fill={isPR?'#ffd12d':i===pts.length-1?'#ff8c00':'#3a3a3a'}/>})}
                     </svg>
-                    <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#2e2e2e',marginTop:2}}>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#666',marginTop:2}}>
                       <span>{parseLocalDate(chartData[0].date).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>
-                      {chartData.length>2&&<span style={{color:'#1e1e1e'}}>{chartData.length} sesiones</span>}
+                      {chartData.length>2&&<span style={{color:'#555'}}>{chartData.length} sesiones</span>}
                       <span>{parseLocalDate(chartData[chartData.length-1].date).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>
                     </div>
                   </div>
@@ -726,7 +753,7 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
                 {[...chartData].reverse().map((d,i)=>{
                   const isPR=metric==='1rm'&&d.rm1>0&&exBest>0&&d.rm1>=exBest
                   return(<div key={i} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderTop:'1px solid #141414',fontSize:11,alignItems:'center'}}>
-                    <div style={{color:'#444'}}>{parseLocalDate(d.date).toLocaleDateString('es-ES',{day:'numeric',month:'short'}).toUpperCase()}</div>
+                    <div style={{color:'#777'}}>{parseLocalDate(d.date).toLocaleDateString('es-ES',{day:'numeric',month:'short'}).toUpperCase()}</div>
                     <div style={{color:isPR?'#ffd12d':'#7ed957',fontWeight:700}}>{isPR?'🏆':''} {Math.round(yv(d))}{metric==='1rm'?' kg':' kg vol'}</div>
                   </div>)
                 })}
@@ -734,6 +761,223 @@ function ProgressView({ sessions, exercises, allTimeBests, allSessions, dayIdx }
             </>
           )}
         </>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════ BODY VIEW ═══════════ */
+const BODY_MUSCLES = [
+  {key:'pecho',      label:'PECHO',       icon:'📐', bilateral:false, instructions:'Cinta horizontal alrededor del pecho a la altura de los pezones, brazos relajados a los lados. Espira antes de medir.'},
+  {key:'biceps',     label:'BÍCEPS',      icon:'💪', bilateral:true,  instructions:'Brazo relajado colgando, cinta en el punto más grueso del músculo a medio camino entre hombro y codo. Mide ambos brazos para detectar asimetrías.'},
+  {key:'cuadriceps', label:'CUÁDRICEPS',  icon:'🦵', bilateral:true,  instructions:'De pie con el peso repartido. Mide siempre a la misma distancia de la rótula — recomendado 20 cm por encima del borde superior de la rodilla. Mide ambas piernas.'},
+  {key:'gemelos',    label:'GEMELOS',     icon:'🦿', bilateral:true,  instructions:'De pie con el peso repartido, cinta en el punto más grueso de la pantorrilla. Mide ambas piernas.'},
+]
+
+function BodyView({ measurements, onSave, onDelete }) {
+  const [showForm, setShowForm] = useState(false)
+  const [sel, setSel] = useState('biceps')
+  const [form, setForm] = useState({})
+  const [formDate, setFormDate] = useState(localDateStr())
+
+  const sorted = [...measurements].sort((a,b)=>a.date.localeCompare(b.date))
+  const muscle = BODY_MUSCLES.find(m=>m.key===sel)
+  const lKey = muscle.bilateral ? `${sel}_l` : sel
+  const rKey = muscle.bilateral ? `${sel}_r` : null
+
+  const chartDataL = sorted.filter(d=>d[lKey]!=null)
+  const chartDataR = rKey ? sorted.filter(d=>d[rKey]!=null) : []
+  const latestL = chartDataL.at(-1)?.[lKey]
+  const latestR = rKey ? chartDataR.at(-1)?.[rKey] : null
+  const deltaL = chartDataL.length>1 ? Math.round((chartDataL.at(-1)[lKey]-chartDataL[0][lKey])*10)/10 : null
+  const deltaR = rKey&&chartDataR.length>1 ? Math.round((chartDataR.at(-1)[rKey]-chartDataR[0][rKey])*10)/10 : null
+
+  const handleSave = () => {
+    const hasData = BODY_MUSCLES.some(m=>m.bilateral
+      ? (+form[`${m.key}_l`]>0)||(+form[`${m.key}_r`]>0)
+      : +form[m.key]>0)
+    if(!hasData) return
+    const entry={date:formDate,savedAt:new Date().toISOString()}
+    BODY_MUSCLES.forEach(m=>{
+      if(m.bilateral){
+        if(+form[`${m.key}_l`]>0) entry[`${m.key}_l`]=+form[`${m.key}_l`]
+        if(+form[`${m.key}_r`]>0) entry[`${m.key}_r`]=+form[`${m.key}_r`]
+      } else {
+        if(+form[m.key]>0) entry[m.key]=+form[m.key]
+      }
+    })
+    onSave(entry); setShowForm(false); setForm({}); setFormDate(localDateStr())
+  }
+
+  const dColor = d => d==null?'#888':d>0?'#4caf50':d<0?'#ff4444':'#888'
+  const dStr = d => d==null?'—':d>=0?`+${d} cm`:`${d} cm`
+
+  return (
+    <div style={{padding:12}}>
+      {/* MUSCLE SELECTOR */}
+      <div style={{display:'flex',gap:5,marginBottom:12}}>
+        {BODY_MUSCLES.map(m=>(
+          <button key={m.key} onClick={()=>setSel(m.key)} style={{flex:1,padding:'8px 4px',background:sel===m.key?'#ff8c00':'#0e0e0e',color:sel===m.key?'#080808':'#777',border:`1px solid ${sel===m.key?'#ff8c00':'#1a1a1a'}`,borderRadius:5,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit',lineHeight:1.5}}>
+            {m.icon}<br/>{m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* STATS */}
+      {muscle.bilateral ? (
+        <>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            {[{side:'IZQUIERDA',val:latestL,delta:deltaL,col:'#ff8c00'},{side:'DERECHA',val:latestR,delta:deltaR,col:'#7ed957'}].map(({side,val,delta,col})=>(
+              <div key={side} style={{background:'#0d0d0d',border:`1px solid ${val!=null?'#1e1e1e':'#141414'}`,borderLeft:`3px solid ${val!=null?col:'#222'}`,borderRadius:7,padding:'10px 8px',textAlign:'center'}}>
+                <div style={{fontSize:9,letterSpacing:2,color:'#666',fontWeight:800}}>{side}</div>
+                <div style={{fontSize:18,fontWeight:900,color:val!=null?col:'#555',marginTop:2}}>{val!=null?`${val} cm`:'—'}</div>
+                {delta!=null&&<div style={{fontSize:11,fontWeight:700,color:dColor(delta),marginTop:2}}>{dStr(delta)}</div>}
+              </div>
+            ))}
+          </div>
+          <div style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'7px',textAlign:'center',marginBottom:12}}>
+            <div style={{fontSize:9,letterSpacing:2,color:'#666',fontWeight:800}}>MEDICIONES</div>
+            <div style={{fontSize:14,fontWeight:900,color:'#ff8c00',marginTop:1}}>{Math.max(chartDataL.length,chartDataR.length)||'—'}</div>
+          </div>
+        </>
+      ) : (
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:12}}>
+          {[
+            {label:'ACTUAL',value:latestL!=null?`${latestL} cm`:'—',color:'#f0ece3'},
+            {label:'PROGRESO',value:dStr(deltaL),color:dColor(deltaL)},
+            {label:'MEDICIONES',value:chartDataL.length||'—',color:'#ff8c00'},
+          ].map(({label,value,color})=>(
+            <div key={label} style={{background:'#0d0d0d',border:'1px solid #181818',borderRadius:7,padding:'10px 6px',textAlign:'center'}}>
+              <div style={{fontSize:9,letterSpacing:2,color:'#666',fontWeight:800}}>{label}</div>
+              <div style={{fontSize:16,fontWeight:900,color,marginTop:3}}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* CHART */}
+      {(chartDataL.length>=2||chartDataR.length>=2)&&(()=>{
+        const allDates=[...new Set([...chartDataL.map(d=>d.date),...chartDataR.map(d=>d.date)])].sort()
+        const allVals=[...chartDataL.map(d=>d[lKey]),...(rKey?chartDataR.map(d=>d[rKey]):[])].filter(v=>v>0)
+        if(!allVals.length) return null
+        const mn=Math.min(...allVals)*0.97, mx=Math.max(...allVals)*1.03
+        const W=320, H=65
+        const dx=date=>allDates.length<=1?W/2:(allDates.indexOf(date)/(allDates.length-1))*W
+        const dy=v=>H-((v-mn)/(mx-mn||1))*H
+        const pathOf=(data,key)=>data.length<1?null:data.map((d,i)=>`${i===0?'M':'L'}${dx(d.date).toFixed(1)},${dy(d[key]).toFixed(1)}`).join(' ')
+        const pL=pathOf(chartDataL,lKey), pR=rKey?pathOf(chartDataR,rKey):null
+        return(
+          <div style={{background:'#0a0a0a',borderRadius:8,padding:'12px 8px 6px',marginBottom:12}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+              <div style={{fontSize:9,color:'#666',letterSpacing:3}}>{muscle.label} — EVOLUCIÓN (cm)</div>
+              {rKey&&<div style={{display:'flex',gap:10,fontSize:9}}>
+                <span style={{color:'#ff8c00',fontWeight:800}}>— IZQ</span>
+                <span style={{color:'#7ed957',fontWeight:800}}>— DER</span>
+              </div>}
+            </div>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{width:'100%',height:65}}>
+              {pL&&<path d={pL} fill="none" stroke="#ff8c00" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
+              {pR&&<path d={pR} fill="none" stroke="#7ed957" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>}
+              {chartDataL.map((d,i)=><circle key={`l${i}`} cx={dx(d.date)} cy={dy(d[lKey])} r={i===chartDataL.length-1?4:2.5} fill={i===chartDataL.length-1?'#ff8c00':'#3a3a3a'}/>)}
+              {rKey&&chartDataR.map((d,i)=><circle key={`r${i}`} cx={dx(d.date)} cy={dy(d[rKey])} r={i===chartDataR.length-1?4:2.5} fill={i===chartDataR.length-1?'#7ed957':'#2a4a2a'}/>)}
+            </svg>
+            <div style={{display:'flex',justifyContent:'space-between',fontSize:9,color:'#666',marginTop:2}}>
+              <span>{parseLocalDate(allDates[0]).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>
+              <span>{parseLocalDate(allDates[allDates.length-1]).toLocaleDateString('es-ES',{day:'numeric',month:'numeric'})}</span>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* HOW TO MEASURE */}
+      <div style={{background:'#090909',border:'1px solid #181818',borderRadius:6,padding:'10px 12px',marginBottom:12}}>
+        <div style={{fontSize:9,color:'#ff8c00',letterSpacing:2,fontWeight:800,marginBottom:5}}>📐 CÓMO MEDIR — {muscle.label}</div>
+        <div style={{fontSize:11,color:'#888',lineHeight:1.6}}>{muscle.instructions}</div>
+      </div>
+
+      {/* ADD BUTTON */}
+      <button onClick={()=>setShowForm(true)} style={{width:'100%',padding:'13px',background:'linear-gradient(135deg,#ff8c00,#e06600)',color:'#080808',border:'none',borderRadius:8,fontSize:14,fontWeight:900,cursor:'pointer',fontFamily:'inherit',letterSpacing:2,marginBottom:16}}>
+        + AÑADIR MEDICIÓN
+      </button>
+
+      {/* HISTORY */}
+      {!measurements.length&&<div style={{textAlign:'center',color:'#555',padding:'30px 0',fontSize:11}}>Sin mediciones todavía</div>}
+      {[...sorted].reverse().map((entry,i)=>{
+        const origIdx=measurements.indexOf(entry)
+        return(
+          <div key={i} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:'10px 12px',marginBottom:8}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:800,color:'#ff8c00'}}>
+                {parseLocalDate(entry.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}
+              </div>
+              <button onClick={()=>{if(window.confirm('¿Borrar esta medición?'))onDelete(origIdx)}} style={{background:'transparent',border:'none',color:'#555',fontSize:14,cursor:'pointer',padding:'0 2px'}}>🗑</button>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:5}}>
+              {BODY_MUSCLES.map(m=>{
+                if(!m.bilateral){
+                  if(entry[m.key]==null) return null
+                  return(
+                    <div key={m.key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',background:'#131313',borderRadius:5,padding:'5px 8px'}}>
+                      <span style={{fontSize:10,color:'#666',fontWeight:700}}>{m.label}</span>
+                      <span style={{fontSize:13,fontWeight:900,color:'#f0ece3'}}>{entry[m.key]}<span style={{fontSize:9,color:'#555'}}> cm</span></span>
+                    </div>
+                  )
+                }
+                const hasL=entry[`${m.key}_l`]!=null, hasR=entry[`${m.key}_r`]!=null
+                if(!hasL&&!hasR) return null
+                const diff = hasL&&hasR ? Math.round((entry[`${m.key}_l`]-entry[`${m.key}_r`])*10)/10 : null
+                return(
+                  <div key={m.key} style={{background:'#131313',borderRadius:5,padding:'6px 8px'}}>
+                    <div style={{fontSize:10,color:'#666',fontWeight:700,marginBottom:5}}>{m.label}</div>
+                    <div style={{display:'flex',gap:10,alignItems:'center'}}>
+                      {hasL&&<span style={{fontSize:13,fontWeight:900}}><span style={{fontSize:9,color:'#ff8c00',fontWeight:800}}>IZQ </span><span style={{color:'#f0ece3'}}>{entry[`${m.key}_l`]}</span><span style={{fontSize:9,color:'#555'}}> cm</span></span>}
+                      {hasR&&<span style={{fontSize:13,fontWeight:900}}><span style={{fontSize:9,color:'#7ed957',fontWeight:800}}>DER </span><span style={{color:'#f0ece3'}}>{entry[`${m.key}_r`]}</span><span style={{fontSize:9,color:'#555'}}> cm</span></span>}
+                      {diff!=null&&diff!==0&&<span style={{marginLeft:'auto',fontSize:9,color:'#888'}}>Δ {Math.abs(diff)} cm</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* FORM MODAL */}
+      {showForm&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',zIndex:400,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setShowForm(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#111',border:'1px solid #2a2a2a',borderRadius:'16px 16px 0 0',padding:'24px 20px 32px',width:'100%',maxWidth:480,maxHeight:'90vh',overflowY:'auto'}}>
+            <div style={{fontSize:12,fontWeight:900,letterSpacing:2,marginBottom:16,color:'#ff8c00'}}>📐 NUEVA MEDICIÓN</div>
+            <div style={{fontSize:11,color:'#777',letterSpacing:2,fontWeight:800,marginBottom:6}}>FECHA</div>
+            <input type="date" value={formDate} onChange={e=>setFormDate(e.target.value)} style={{width:'100%',background:'#0d0d0d',border:'1.5px solid #2a2a2a',borderRadius:6,color:'#f0ece3',padding:'10px 12px',fontSize:14,fontFamily:'inherit',outline:'none',marginBottom:20,boxSizing:'border-box'}}/>
+            {BODY_MUSCLES.map(m=>(
+              <div key={m.key} style={{marginBottom:16}}>
+                <div style={{fontSize:11,color:'#777',letterSpacing:2,fontWeight:800,marginBottom:8}}>{m.icon} {m.label}</div>
+                {m.bilateral ? (
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                    {[{sfx:'_l',label:'IZQ',col:'#ff8c00'},{sfx:'_r',label:'DER',col:'#7ed957'}].map(({sfx,label,col})=>(
+                      <div key={sfx}>
+                        <div style={{fontSize:10,color:col,fontWeight:900,letterSpacing:1,marginBottom:4,textAlign:'center'}}>{label}</div>
+                        <div style={{display:'flex',alignItems:'center',background:'#0d0d0d',border:`1.5px solid ${form[m.key+sfx]?col:'#2a2a2a'}`,borderRadius:6,overflow:'hidden',transition:'border-color 0.15s'}}>
+                          <input type="number" inputMode="decimal" step="0.1" placeholder="—" value={form[m.key+sfx]||''} onChange={e=>setForm(f=>({...f,[m.key+sfx]:e.target.value}))} style={{flex:1,background:'transparent',border:'none',color:'#f0ece3',padding:'10px 8px',fontSize:20,fontFamily:"'Barlow Condensed','Arial Narrow',sans-serif",fontWeight:900,outline:'none',width:0}}/>
+                          <span style={{paddingRight:8,fontSize:11,color:'#555',fontWeight:700,flexShrink:0}}>cm</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{display:'flex',alignItems:'center',background:'#0d0d0d',border:'1.5px solid #2a2a2a',borderRadius:6,overflow:'hidden'}}>
+                    <input type="number" inputMode="decimal" step="0.1" placeholder="—" value={form[m.key]||''} onChange={e=>setForm(f=>({...f,[m.key]:e.target.value}))} style={{flex:1,background:'transparent',border:'none',color:'#f0ece3',padding:'12px 14px',fontSize:22,fontFamily:"'Barlow Condensed','Arial Narrow',sans-serif",fontWeight:900,outline:'none'}}/>
+                    <span style={{paddingRight:14,fontSize:13,color:'#555',fontWeight:700,flexShrink:0}}>cm</span>
+                  </div>
+                )}
+              </div>
+            ))}
+            <div style={{display:'flex',gap:8,marginTop:8}}>
+              <button onClick={()=>setShowForm(false)} style={{flex:1,padding:'14px',background:'transparent',color:'#555',border:'1.5px solid #2a2a2a',borderRadius:8,fontSize:14,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>CANCELAR</button>
+              <button onClick={handleSave} style={{flex:2,padding:'14px',background:'linear-gradient(135deg,#ff8c00,#e06600)',color:'#080808',border:'none',borderRadius:8,fontSize:14,fontWeight:900,cursor:'pointer',fontFamily:'inherit',letterSpacing:2}}>GUARDAR</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -771,17 +1015,26 @@ export default function App() {
   const [showSaveConfirm,setShowSaveConfirm] = useState(false)
   const [pendingSaveDate,setPendingSaveDate] = useState('')
   const [historyMonth,setHistoryMonth] = useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`})
+  const [measurements,setMeasurements] = useState([])
   const sessRef=useRef(null), restRef=useRef(null)
   const timerStateRef=useRef({started:false,elapsed:0,paused:false,dayIdx:0})
+  const restStateRef=useRef({restTime:0,restRunning:false})
 
   useEffect(()=>{
     timerStateRef.current={started:sessionStarted,elapsed:sessionElapsed,paused:sessionPaused,dayIdx:activeDay}
   },[sessionStarted,sessionElapsed,sessionPaused,activeDay])
 
   useEffect(()=>{
+    restStateRef.current={restTime,restRunning}
+  },[restTime,restRunning])
+
+  useEffect(()=>{
     const onHide=()=>{
       const{started,elapsed,paused,dayIdx}=timerStateRef.current
       if(started)storage.set('session_state',JSON.stringify({started,elapsed,paused,dayIdx,savedAt:new Date().toISOString()}))
+      const{restTime:rt,restRunning:rr}=restStateRef.current
+      if(rt>0)storage.set('rest_state',JSON.stringify({restTime:rt,restRunning:rr,savedAt:new Date().toISOString()}))
+      else storage.delete('rest_state')
     }
     document.addEventListener('visibilitychange',onHide)
     return()=>document.removeEventListener('visibilitychange',onHide)
@@ -812,6 +1065,8 @@ export default function App() {
       const ddw=await storage.get('deload_dismissed_week');if(ddw)setDeloadDismissedWeek(JSON.parse(ddw.value))
       if(parsedSess)setFatigueSignals(detectFatigueSignals(parsedSess,loadedProgConfig))
       const ss=await storage.get('session_state');if(ss){const st=JSON.parse(ss.value);if(st.started){setSessionStarted(true);setSessionPaused(st.paused||false);const add=st.paused?0:Math.floor((Date.now()-new Date(st.savedAt))/1000);setSessionElapsed((st.elapsed||0)+add);if(st.dayIdx!=null)setActiveDay(st.dayIdx)}}
+      const rs=await storage.get('rest_state');if(rs){const rst=JSON.parse(rs.value);if(rst.restTime>0){const gone=rst.restRunning?Math.floor((Date.now()-new Date(rst.savedAt))/1000):0;const rem=Math.max(0,rst.restTime-gone);if(rem>0){setRestTime(rem);setRestRunning(rst.restRunning)}else{storage.delete('rest_state')}}}
+      const msmt=await storage.get('measurements');if(msmt)setMeasurements(JSON.parse(msmt.value))
       setLoaded(true)
     })()
   },[])
@@ -822,6 +1077,9 @@ export default function App() {
     for(const d of[0,1])clean[d]={...nc[d],exercises:nc[d].exercises.map(ex=>({...ex,photo:null}))}
     await storage.set('curr',JSON.stringify(clean))
   },[])
+
+  const saveMeasurement = entry => { const nm=[...measurements,entry]; setMeasurements(nm); storage.set('measurements',JSON.stringify(nm)) }
+  const deleteMeasurement = idx => { const nm=measurements.filter((_,i)=>i!==idx); setMeasurements(nm); storage.set('measurements',JSON.stringify(nm)) }
 
   const startRest = dur => { setRestTime(dur||restDuration); setRestRunning(true) }
   const toggleAutoRest = () => { const nv=!autoRest; setAutoRest(nv); storage.set('autorest',JSON.stringify(nv)) }
@@ -857,7 +1115,7 @@ export default function App() {
   const saveSession = (date=localDateStr()) => {
     const s={...current[activeDay],date,savedAt:new Date().toISOString(),duration:sessionElapsed,exercises:current[activeDay].exercises.map(ex=>({...ex,photo:null}))}
     const ns={...sessions,[activeDay]:[s,...(sessions[activeDay]||[])]}
-    const nc={...current,[activeDay]:defaultSession(activeDay)}
+    const nc={...current,[activeDay]:sessionWithPrevLoads(activeDay,s)}
     setSessions(ns);setCurrent(nc);setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0)
     setAllTimeBests(calcAllTimeBests(ns));persist(ns,nc);setSaved(true);setTimeout(()=>setSaved(false),2500)
     storage.set('session_state',JSON.stringify({started:false}))
@@ -874,7 +1132,7 @@ export default function App() {
   }
 
   const handleBackup = async () => {
-    const keys = ['sess','curr','meso','autorest','rest_duration','progression_config','progression_status','deload_dismissed_week']
+    const keys = ['sess','curr','meso','autorest','rest_duration','progression_config','progression_status','deload_dismissed_week','measurements']
     const vals = await Promise.all(keys.map(k=>storage.get(k)))
     const data = {version:2,exportedAt:new Date().toISOString()}
     keys.forEach((k,i)=>{ if(vals[i])data[k]=vals[i].value })
@@ -898,6 +1156,7 @@ export default function App() {
       if(data.progression_config){await storage.set('progression_config',data.progression_config);setProgConfig(JSON.parse(data.progression_config))}
       if(data.progression_status){await storage.set('progression_status',data.progression_status);setProgStatus(JSON.parse(data.progression_status))}
       if(data.deload_dismissed_week!=null){await storage.set('deload_dismissed_week',data.deload_dismissed_week);setDeloadDismissedWeek(JSON.parse(data.deload_dismissed_week))}
+      if(data.measurements){await storage.set('measurements',data.measurements);setMeasurements(JSON.parse(data.measurements))}
       alert('✓ Backup restaurado')
     } catch {
       alert('Error al leer el archivo')
@@ -908,7 +1167,7 @@ export default function App() {
   if(!loaded) return (
     <div style={{background:'#080808',height:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:16}}>
       <div style={{fontSize:64,color:'#ff8c00'}}>⬡</div>
-      <div style={{fontSize:13,letterSpacing:4,color:'#383838',fontWeight:800}}>IRON LOG · CARGANDO...</div>
+      <div style={{fontSize:13,letterSpacing:4,color:'#666',fontWeight:800}}>IRON LOG · CARGANDO...</div>
     </div>
   )
 
@@ -939,7 +1198,7 @@ export default function App() {
               <div style={{fontSize:9,letterSpacing:5,color:'#ff8c00',fontWeight:800}}>⬡ IRON LOG</div>
               <button onClick={()=>setShowHelp(true)} style={{width:18,height:18,borderRadius:'50%',background:'#1a1000',border:'1.5px solid #ff8c0066',color:'#ff8c00aa',fontSize:10,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,padding:0,fontFamily:'inherit',flexShrink:0}}>?</button>
             </div>
-            <div style={{fontSize:11,color:'#3a3a3a',letterSpacing:1,marginTop:1}}>{now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}).toUpperCase()}</div>
+            <div style={{fontSize:11,color:'#777',letterSpacing:1,marginTop:1}}>{now.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'}).toUpperCase()}</div>
           </div>
           <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:4}}>
             <div style={{fontSize:28,fontWeight:900,letterSpacing:2,color:'#ff8c00',lineHeight:1}}>{now.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}</div>
@@ -949,7 +1208,7 @@ export default function App() {
                 <span style={{fontSize:13,fontWeight:800,letterSpacing:1,color:sessionPaused?'#ffaa2d':'#f0ece3'}}>{fmt(sessionElapsed)}</span>
                 <button onClick={()=>{const np=!sessionPaused;setSessionPaused(np);storage.set('session_state',JSON.stringify({started:true,elapsed:sessionElapsed,paused:np,dayIdx:activeDay,savedAt:new Date().toISOString()}))}} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:13,cursor:'pointer',padding:'0 2px'}}>{sessionPaused?'▶':'⏸'}</button>
                 <button onClick={openSaveConfirm} style={{background:'transparent',border:'none',color:'#4caf50',fontSize:11,cursor:'pointer',padding:'0 2px',fontWeight:900}}>■</button>
-                <button onClick={()=>{if(window.confirm('¿Descartar sesión?')){setCurrent(c=>({...c,[activeDay]:defaultSession(activeDay)}));setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0);storage.set('session_state',JSON.stringify({started:false}))}}} style={{background:'transparent',border:'none',color:'#3a3a3a',fontSize:13,cursor:'pointer',padding:'0 2px'}}>✕</button>
+                <button onClick={()=>{if(window.confirm('¿Descartar sesión?')){setCurrent(c=>({...c,[activeDay]:sessionWithPrevLoads(activeDay,sessions[activeDay]?.[0])}));setSessionStarted(false);setSessionPaused(false);setSessionElapsed(0);storage.set('session_state',JSON.stringify({started:false}))}}} style={{background:'transparent',border:'none',color:'#666',fontSize:13,cursor:'pointer',padding:'0 2px'}}>✕</button>
               </div>
             ):(
               <button onClick={()=>{setSessionStarted(true);setSessionElapsed(0);storage.set('session_state',JSON.stringify({started:true,elapsed:0,paused:false,dayIdx:activeDay,savedAt:new Date().toISOString()}))}} style={{background:'#1a0e00',border:'1.5px solid #ff8c00',borderRadius:20,padding:'4px 12px',color:'#ff8c00',fontSize:11,fontWeight:900,cursor:'pointer',letterSpacing:1,fontFamily:'inherit'}}>▶ INICIAR</button>
@@ -957,7 +1216,7 @@ export default function App() {
           </div>
         </div>
         <div style={{display:'flex',gap:5}}>
-          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['progress','📈 PROGRESO'],['history','🗂 HISTORIAL']].map(([v,l])=>(
+          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['progress','📈 PROGRESO'],['history','🗂 HISTORIAL'],['body','📏 MEDIDAS']].map(([v,l])=>(
             <button key={v} onClick={()=>setView(v)} style={{flex:1,padding:'8px 2px',background:view===v?'#ff8c00':'transparent',color:view===v?'#080808':'#555',border:`1.5px solid ${view===v?'#ff8c00':'#222'}`,borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:0.5,cursor:'pointer',fontFamily:'inherit'}}>{l}</button>
           ))}
         </div>
@@ -966,12 +1225,12 @@ export default function App() {
       {/* MESO STRIP */}
       <div onClick={()=>setShowMesoSetup(true)} style={{display:'flex',alignItems:'center',gap:8,margin:'8px 12px 0',background:'#0d0d0d',border:`1px solid ${mesoInfo?.deload?'#ff8c00':'#1e1e1e'}`,borderRadius:6,padding:'7px 10px',cursor:'pointer'}}>
         {mesoInfo?(<>
-          <div style={{fontSize:9,letterSpacing:2,color:'#444',fontWeight:800,flexShrink:0}}>MESOCICLO</div>
+          <div style={{fontSize:9,letterSpacing:2,color:'#666',fontWeight:800,flexShrink:0}}>MESOCICLO</div>
           <div style={{flex:1,height:4,background:'#1a1a1a',borderRadius:2}}><div style={{height:4,borderRadius:2,background:'#ff8c00',width:`${mesoInfo.pct}%`,transition:'width 0.5s'}}/></div>
           <div style={{fontSize:11,fontWeight:800,color:mesoInfo.deload?'#ff8c00':'#f0ece3',flexShrink:0}}>{mesoInfo.deload?'🔄 ':''}{fatigueSignals.length>0?'⚠️ ':''}SEM {mesoInfo.week}/{mesoInfo.total}</div>
-          <div style={{fontSize:9,color:'#333'}}>⚙️</div>
+          <div style={{fontSize:9,color:'#666'}}>⚙️</div>
         </>):(
-          <div style={{fontSize:10,color:'#333',fontWeight:700,letterSpacing:2,width:'100%',textAlign:'center'}}>+ CONFIGURAR MESOCICLO</div>
+          <div style={{fontSize:10,color:'#666',fontWeight:700,letterSpacing:2,width:'100%',textAlign:'center'}}>+ CONFIGURAR MESOCICLO</div>
         )}
       </div>
 
@@ -989,7 +1248,7 @@ export default function App() {
       {/* DAY TABS — solo en log */}
       {view==='log'&&<div style={{display:'flex',margin:'8px 12px 0',gap:8}}>
         {['DÍA A','DÍA B'].map((d,i)=>(
-          <button key={i} onClick={()=>{setActiveDay(i);setExpandedEx(0)}} style={{flex:1,padding:'11px 8px',background:activeDay===i?'#161616':'transparent',border:`2px solid ${activeDay===i?'#ff8c00':'#1e1e1e'}`,borderRadius:6,color:activeDay===i?'#ff8c00':'#333',fontSize:15,fontWeight:900,letterSpacing:3,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
+          <button key={i} onClick={()=>{setActiveDay(i);setExpandedEx(0)}} style={{flex:1,padding:'11px 8px',background:activeDay===i?'#161616':'transparent',border:`2px solid ${activeDay===i?'#ff8c00':'#1e1e1e'}`,borderRadius:6,color:activeDay===i?'#ff8c00':'#555',fontSize:15,fontWeight:900,letterSpacing:3,cursor:'pointer',fontFamily:'inherit',position:'relative'}}>
             {d}
             {(sessions[i]||[]).length>0&&<span style={{position:'absolute',top:4,right:6,background:'#ff8c00',color:'#080808',borderRadius:10,fontSize:9,fontWeight:900,padding:'1px 5px'}}>{(sessions[i]||[]).length}</span>}
           </button>
@@ -999,7 +1258,7 @@ export default function App() {
       {/* REST TIMER */}
       {(restTime>0||restRunning)&&(
         <div style={{position:'fixed',bottom:14,left:'50%',transform:'translateX(-50%)',background:'#111',border:`2px solid ${restTime===0?'#4caf50':restTime<30?'#ff4444':'#ff8c00'}`,borderRadius:14,padding:'10px 20px',zIndex:200,boxShadow:'0 8px 32px rgba(0,0,0,0.8)',textAlign:'center',minWidth:210}}>
-          <div style={{fontSize:8,letterSpacing:4,color:'#444',fontWeight:800}}>DESCANSO</div>
+          <div style={{fontSize:9,letterSpacing:4,color:'#666',fontWeight:800}}>DESCANSO</div>
           <div style={{fontSize:44,fontWeight:900,color:restTime===0?'#4caf50':restTime<30?'#ff4444':'#ff8c00',lineHeight:1.1}}>{restTime===0?'¡VAMOS!':fmt(restTime)}</div>
           <div style={{height:3,background:'#1e1e1e',borderRadius:2,margin:'7px 0 8px'}}><div style={{height:3,borderRadius:2,background:restTime<30?'#ff4444':'#ff8c00',width:`${(restTime/restDuration)*100}%`,transition:'width 1s linear'}}/></div>
           <div style={{display:'flex',gap:6,justifyContent:'center'}}>
@@ -1025,7 +1284,7 @@ export default function App() {
       {view==='log'&&(
         <div style={{padding:'10px 12px'}}>
           <div style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:'8px 10px',marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
-            <span style={{fontSize:8,letterSpacing:1,color:'#444',fontWeight:800,flexShrink:0}}>⏱</span>
+            <span style={{fontSize:8,letterSpacing:1,color:'#666',fontWeight:800,flexShrink:0}}>⏱</span>
             <div style={{display:'flex',gap:3,flex:1}}>
               {REST_PRESETS.map(s=>(
                 <button key={s} onClick={()=>{setRestDuration(s);storage.set('rest_duration',JSON.stringify(s))}} style={{flex:1,padding:'5px 0',background:restDuration===s?'#ff8c00':'#1a1a1a',color:restDuration===s?'#080808':'#555',border:`1px solid ${restDuration===s?'#ff8c00':'#222'}`,borderRadius:3,fontSize:9,fontWeight:800,cursor:'pointer',fontFamily:'inherit'}}>
@@ -1033,7 +1292,7 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <button onClick={toggleAutoRest} style={{background:autoRest?'#ff8c0022':'transparent',border:`1px solid ${autoRest?'#ff8c00':'#2a2a2a'}`,borderRadius:4,padding:'4px 7px',fontSize:8,color:autoRest?'#ff8c00':'#444',cursor:'pointer',fontFamily:'inherit',fontWeight:800,flexShrink:0,letterSpacing:1}}>
+            <button onClick={toggleAutoRest} style={{background:autoRest?'#ff8c0022':'transparent',border:`1px solid ${autoRest?'#ff8c00':'#2a2a2a'}`,borderRadius:4,padding:'4px 7px',fontSize:9,color:autoRest?'#ff8c00':'#666',cursor:'pointer',fontFamily:'inherit',fontWeight:800,flexShrink:0,letterSpacing:1}}>
               AUTO {autoRest?'●':'○'}
             </button>
           </div>
@@ -1094,46 +1353,48 @@ export default function App() {
             const advMonth=m=>{const[y,mo]=m.split('-').map(Number);return mo===12?`${y+1}-01`:`${y}-${String(mo+1).padStart(2,'0')}`}
             const curMonth=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`
             const monthLabel=m=>{const[y,mo]=m.split('-');return new Date(parseInt(y),parseInt(mo)-1,1).toLocaleDateString('es-ES',{month:'long',year:'numeric'}).toUpperCase()}
-            const allDay=sessions[activeDay]||[]
-            const filtered=allDay.filter(s=>s.date&&s.date.startsWith(historyMonth))
+            const allCombined=[
+              ...(sessions[0]||[]).map((s,i)=>({...s,_day:0,_idx:i})),
+              ...(sessions[1]||[]).map((s,i)=>({...s,_day:1,_idx:i}))
+            ].sort((a,b)=>b.date.localeCompare(a.date)||(b.savedAt||'').localeCompare(a.savedAt||''))
+            const filtered=allCombined.filter(s=>s.date&&s.date.startsWith(historyMonth))
             return(<>
               <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,background:'#0d0d0d',border:'1px solid #1e1e1e',borderRadius:7,padding:'8px 10px'}}>
                 <button onClick={()=>setHistoryMonth(adjMonth(historyMonth))} style={{background:'transparent',border:'none',color:'#ff8c00',fontSize:20,cursor:'pointer',padding:'0 4px',lineHeight:1}}>‹</button>
                 <div style={{flex:1,textAlign:'center'}}>
-                  <div style={{fontSize:9,color:'#444',letterSpacing:2,fontWeight:700}}>HISTORIAL — {activeDay===0?'DÍA A':'DÍA B'}</div>
+                  <div style={{fontSize:9,color:'#666',letterSpacing:2,fontWeight:700}}>HISTORIAL</div>
                   <div style={{fontSize:13,fontWeight:800,color:'#f0ece3'}}>{monthLabel(historyMonth)}</div>
                 </div>
                 <button onClick={()=>historyMonth<curMonth&&setHistoryMonth(advMonth(historyMonth))} style={{background:'transparent',border:'none',color:historyMonth<curMonth?'#ff8c00':'#333',fontSize:20,cursor:historyMonth<curMonth?'pointer':'default',padding:'0 4px',lineHeight:1}}>›</button>
               </div>
               {!filtered.length
-                ?<div style={{textAlign:'center',color:'#333',padding:'30px 0',fontSize:11}}>Sin sesiones en {monthLabel(historyMonth)}</div>
-                :filtered.map((s,si)=>{
-                  const origIdx=allDay.indexOf(s)
-                  return(
+                ?<div style={{textAlign:'center',color:'#555',padding:'30px 0',fontSize:11}}>Sin sesiones en {monthLabel(historyMonth)}</div>
+                :filtered.map((s,si)=>(
                     <div key={si} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:12,marginBottom:10}}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-                        <div style={{fontSize:13,fontWeight:800,color:'#ff8c00'}}>{parseLocalDate(s.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}</div>
+                        <div style={{display:'flex',alignItems:'center',gap:8}}>
+                          <span style={{fontSize:10,fontWeight:900,color:'#080808',background:'#ff8c00',borderRadius:3,padding:'1px 6px',letterSpacing:1,flexShrink:0}}>DÍA {s._day===0?'A':'B'}</span>
+                          <div style={{fontSize:13,fontWeight:800,color:'#f0ece3'}}>{parseLocalDate(s.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}</div>
+                        </div>
                         <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                          {s.duration&&<span style={{fontSize:10,color:'#383838'}}>⏱ {fmt(s.duration)}</span>}
-                          <span style={{fontSize:10,color:'#2a2a2a'}}>#{allDay.length-origIdx}</span>
-                          <button onClick={()=>{if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[activeDay]:sessions[activeDay].filter((_,i)=>i!==origIdx)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#2a2a2a',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
+                          {s.duration&&<span style={{fontSize:10,color:'#666'}}>⏱ {fmt(s.duration)}</span>}
+                          <button onClick={()=>{if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[s._day]:sessions[s._day].filter((_,i)=>i!==s._idx)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#555',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
                         </div>
                       </div>
-              {s.exercises.map((ex,ei)=>{
-                const done=ex.sets.filter(st=>st.load&&st.reps);if(!done.length)return null
-                const best=Math.max(...done.map(st=>calc1RM(st.load,st.reps)||0))
-                const isPR=allTimeBests[ex.name]&&best>=allTimeBests[ex.name]&&best>0
-                return(<div key={ei} style={{borderTop:'1px solid #161616',paddingTop:6,paddingBottom:6,display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
-                  <div style={{fontSize:11,fontWeight:700,flex:1,color:'#bbb'}}>{ex.name}</div>
-                  <div style={{display:'flex',gap:4,flexWrap:'wrap',justifyContent:'flex-end'}}>
-                    {done.map((st,i)=><span key={i} style={{fontSize:10,background:'#1a1a1a',padding:'2px 5px',borderRadius:3,color:'#777'}}>{st.load}×{st.reps}</span>)}
-                    {best>0&&<span style={{fontSize:10,color:isPR?'#ffd12d':'#7ed957',fontWeight:700}}>{isPR?'🏆':''} ~{best}kg</span>}
-                  </div>
-                </div>)
-              })}
+                      {s.exercises.map((ex,ei)=>{
+                        const done=ex.sets.filter(st=>st.load&&st.reps);if(!done.length)return null
+                        const best=Math.max(...done.map(st=>calc1RM(st.load,st.reps)||0))
+                        const isPR=allTimeBests[ex.name]&&best>=allTimeBests[ex.name]&&best>0
+                        return(<div key={ei} style={{borderTop:'1px solid #161616',paddingTop:6,paddingBottom:6,display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                          <div style={{fontSize:11,fontWeight:700,flex:1,color:'#bbb'}}>{ex.name}</div>
+                          <div style={{display:'flex',gap:4,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                            {done.map((st,i)=><span key={i} style={{fontSize:10,background:'#1a1a1a',padding:'2px 5px',borderRadius:3,color:'#777'}}>{st.load}×{st.reps}</span>)}
+                            {best>0&&<span style={{fontSize:10,color:isPR?'#ffd12d':'#7ed957',fontWeight:700}}>{isPR?'🏆':''} ~{best}kg</span>}
+                          </div>
+                        </div>)
+                      })}
                     </div>
-                  )
-                })
+                  ))
               }
             </>)
           })()}
@@ -1144,7 +1405,9 @@ export default function App() {
         </div>
       )}
 
-      {view==='progress'&&<ProgressView key={activeDay} sessions={sessions[activeDay]||[]} exercises={EXERCISES[activeDay]} allTimeBests={allTimeBests} allSessions={sessions} dayIdx={activeDay}/>}
+      {view==='progress'&&<ProgressView allTimeBests={allTimeBests} allSessions={sessions}/>}
+
+      {view==='body'&&<BodyView measurements={measurements} onSave={saveMeasurement} onDelete={deleteMeasurement}/>}
 
       {showSaveConfirm&&(
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.88)',zIndex:400,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={()=>setShowSaveConfirm(false)}>
