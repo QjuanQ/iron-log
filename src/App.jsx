@@ -354,7 +354,7 @@ function ExCard({ ex, ei, expanded, onToggle, onChange, onSetDone, onSetUndone, 
             <div style={{textAlign:'center',padding:'7px 10px',marginBottom:6,background:'#0a1a0a',border:'1px solid #1e4a1e',borderRadius:6,fontSize:11,fontWeight:900,color:'#4caf50',letterSpacing:2}}>✓ OBJETIVO</div>
           )}
           <div style={{display:'flex',gap:7,marginTop:4}}>
-            <button onClick={addSet} style={{flex:1,padding:'9px',background:'transparent',color:'#666',border:'1.5px dashed #333',borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>+ SERIE EXTRA</button>
+            <button onClick={addSet} style={{flex:1,padding:'9px',background:'transparent',color:'#666',border:'1.5px dashed #333',borderRadius:6,fontSize:10,fontWeight:800,cursor:'pointer',fontFamily:'inherit',letterSpacing:1}}>{done.length >= cfg.setsTarget ? '+ SERIE EXTRA' : '+ AÑADIR SERIE'}</button>
             <button onClick={()=>onRest(restDuration)} style={{padding:'10px 16px',background:'#161616',color:'#ff8c00',border:'1.5px solid #222',borderRadius:6,fontSize:16,cursor:'pointer'}}>⏱</button>
           </div>
           <textarea value={ex.notes} rows={2} onChange={e=>onChange(ex=>({...ex,notes:e.target.value}))} placeholder="Técnica, sensaciones..." style={{width:'100%',background:'#090909',border:'1.5px solid #1c1c1c',borderRadius:6,color:'#aaa',padding:'8px 10px',fontSize:12,outline:'none',resize:'none',lineHeight:1.5,marginTop:10,boxSizing:'border-box',fontFamily:'inherit'}}/>
@@ -1016,6 +1016,7 @@ export default function App() {
   const [pendingSaveDate,setPendingSaveDate] = useState('')
   const [historyMonth,setHistoryMonth] = useState(()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`})
   const [measurements,setMeasurements] = useState([])
+  const [histExpanded,setHistExpanded] = useState({})
   const sessRef=useRef(null), restRef=useRef(null)
   const timerStateRef=useRef({started:false,elapsed:0,paused:false,dayIdx:0})
   const restStateRef=useRef({restTime:0,restRunning:false})
@@ -1056,7 +1057,8 @@ export default function App() {
     (async()=>{
       let parsedSess=null, loadedProgConfig={}
       const s=await storage.get('sess');if(s){parsedSess=JSON.parse(s.value);setSessions(parsedSess);setAllTimeBests(calcAllTimeBests(parsedSess));}
-      const c=await storage.get('curr');if(c)setCurrent(JSON.parse(c.value))
+      const c=await storage.get('curr')
+      if(c){const loadedCurr=JSON.parse(c.value);for(const d of[0,1]){const isEmpty=!loadedCurr[d]?.exercises?.some(ex=>ex.sets?.some(s=>s.load||s.reps||s.done));if(isEmpty&&parsedSess?.[d]?.length)loadedCurr[d]=sessionWithPrevLoads(d,parsedSess[d][0])};setCurrent(loadedCurr)}
       const m=await storage.get('meso');if(m)setMesocycle(JSON.parse(m.value))
       const ar=await storage.get('autorest');if(ar)setAutoRest(JSON.parse(ar.value))
       const rd=await storage.get('rest_duration');if(rd)setRestDuration(JSON.parse(rd.value))
@@ -1216,7 +1218,7 @@ export default function App() {
           </div>
         </div>
         <div style={{display:'flex',gap:5}}>
-          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['progress','📈 PROGRESO'],['history','🗂 HISTORIAL'],['body','📏 MEDIDAS']].map(([v,l])=>(
+          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['progress','📈 PROGRESO'],['body','📏 MEDIDAS'],['history','🗂 HISTORIAL']].map(([v,l])=>(
             <button key={v} onClick={()=>setView(v)} style={{flex:1,padding:'8px 2px',background:view===v?'#ff8c00':'transparent',color:view===v?'#080808':'#555',border:`1.5px solid ${view===v?'#ff8c00':'#222'}`,borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:0.5,cursor:'pointer',fontFamily:'inherit'}}>{l}</button>
           ))}
         </div>
@@ -1369,23 +1371,27 @@ export default function App() {
               </div>
               {!filtered.length
                 ?<div style={{textAlign:'center',color:'#555',padding:'30px 0',fontSize:11}}>Sin sesiones en {monthLabel(historyMonth)}</div>
-                :filtered.map((s,si)=>(
-                    <div key={si} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,padding:12,marginBottom:10}}>
-                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                :filtered.map((s,si)=>{
+                    const hkey=`${s._day}-${s._idx}`
+                    const expanded=!!histExpanded[hkey]
+                    return(
+                    <div key={si} style={{background:'#0e0e0e',border:'1px solid #1a1a1a',borderRadius:8,marginBottom:10,overflow:'hidden'}}>
+                      <div onClick={()=>setHistExpanded(p=>({...p,[hkey]:!p[hkey]}))} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:12,cursor:'pointer'}}>
                         <div style={{display:'flex',alignItems:'center',gap:8}}>
                           <span style={{fontSize:10,fontWeight:900,color:'#080808',background:'#ff8c00',borderRadius:3,padding:'1px 6px',letterSpacing:1,flexShrink:0}}>DÍA {s._day===0?'A':'B'}</span>
                           <div style={{fontSize:13,fontWeight:800,color:'#f0ece3'}}>{parseLocalDate(s.date).toLocaleDateString('es-ES',{weekday:'short',day:'numeric',month:'short'}).toUpperCase()}</div>
                         </div>
                         <div style={{display:'flex',gap:8,alignItems:'center'}}>
                           {s.duration&&<span style={{fontSize:10,color:'#666'}}>⏱ {fmt(s.duration)}</span>}
-                          <button onClick={()=>{if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[s._day]:sessions[s._day].filter((_,i)=>i!==s._idx)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#555',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
+                          <button onClick={e=>{e.stopPropagation();if(window.confirm('¿Borrar esta sesión?')){const ns={...sessions,[s._day]:sessions[s._day].filter((_,i)=>i!==s._idx)};setSessions(ns);setAllTimeBests(calcAllTimeBests(ns));storage.set('sess',JSON.stringify(ns))}}} style={{background:'transparent',border:'none',color:'#555',fontSize:14,cursor:'pointer',padding:'0 2px',lineHeight:1}}>🗑</button>
+                          <span style={{fontSize:12,color:'#555',lineHeight:1}}>{expanded?'▲':'▼'}</span>
                         </div>
                       </div>
-                      {s.exercises.map((ex,ei)=>{
+                      {expanded&&s.exercises.map((ex,ei)=>{
                         const done=ex.sets.filter(st=>st.load&&st.reps);if(!done.length)return null
                         const best=Math.max(...done.map(st=>calc1RM(st.load,st.reps)||0))
                         const isPR=allTimeBests[ex.name]&&best>=allTimeBests[ex.name]&&best>0
-                        return(<div key={ei} style={{borderTop:'1px solid #161616',paddingTop:6,paddingBottom:6,display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
+                        return(<div key={ei} style={{borderTop:'1px solid #161616',padding:'6px 12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:8}}>
                           <div style={{fontSize:11,fontWeight:700,flex:1,color:'#bbb'}}>{ex.name}</div>
                           <div style={{display:'flex',gap:4,flexWrap:'wrap',justifyContent:'flex-end'}}>
                             {done.map((st,i)=><span key={i} style={{fontSize:10,background:'#1a1a1a',padding:'2px 5px',borderRadius:3,color:'#777'}}>{st.load}×{st.reps}</span>)}
@@ -1394,7 +1400,8 @@ export default function App() {
                         </div>)
                       })}
                     </div>
-                  ))
+                    )
+                  })
               }
             </>)
           })()}
