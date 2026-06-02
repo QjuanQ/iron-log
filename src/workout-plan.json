@@ -1,0 +1,38 @@
+{
+  "title": "Plan de entrenamiento",
+  "description": "Días A, B y C con ejercicios y recomendaciones de series/repeticiones.",
+  "days": [
+    {
+      "name": "Día A",
+      "exercises": [
+        {"name": "Elevaciones laterales pecho hacia delante", "alias": "Elevaciones laterales inclinado"},
+        {"name": "Press banca horizontal", "alias": "Press de banca"},
+        {"name": "Tracciones sobre barra fija para dorsales", "alias": "Tracción en barra dorsales"},
+        {"name": "Extensión de tríceps por encima de la cabeza", "alias": "Pushdown tríceps"},
+        {"name": "Curl barra Z / curl inclinado con mancuernas", "alias": "Curl bíceps"},
+        {"name": "Crunches abdominales", "alias": "Crunches"}
+      ]
+    },
+    {
+      "name": "Día B",
+      "exercises": [
+        {"name": "Squats", "alias": "Squats"},
+        {"name": "Hack squat / prensa", "alias": "Hack squat"},
+        {"name": "Gemelos con barra en hombros", "alias": "Extensión gemelos"},
+        {"name": "Pushdown de tríceps / extensión de tríceps por encima de la cabeza", "alias": "Pushdown tríceps"},
+        {"name": "Crunches reversas", "alias": "Crunches"}
+      ]
+    },
+    {
+      "name": "Día C",
+      "exercises": [
+        {"name": "Press banca inclinado", "alias": "Press banca inclinado"},
+        {"name": "Remo con cable para dorsales", "alias": "Remo dorsales"},
+        {"name": "Deadlifts", "alias": "Deadlift"},
+        {"name": "Dips de tríceps", "alias": "Tríceps dips"},
+        {"name": "Hammer curls", "alias": "Hammer curls"},
+        {"name": "Abdominales laterales", "alias": "Crunches"}
+      ]
+    }
+  ]
+}

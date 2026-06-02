@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { storage } from './db.js'
+import workoutPlan from './workout-plan.json'
 import { VERSION, BUILD_DATE } from './version.js'
 
 /* ═══════════ CONSTANTS ═══════════ */
@@ -60,6 +61,21 @@ const PROGRESSION_DEFAULTS = {
   'Hammer curls':                    {setsTarget:5,repsMin:10,repsMax:15,loadIncrement:2.5,rirTarget:2},
   'Extensión gemelos':               {setsTarget:5,repsMin:12,repsMax:20,loadIncrement:2.5,rirTarget:2},
   'Crunches':                        {setsTarget:5,repsMin:15,repsMax:25,loadIncrement:0,  rirTarget:2},
+}
+const PLAN_EXERCISE_ALIASES = {
+  'Elevaciones laterales pecho hacia delante': 'Elevaciones laterales inclinado',
+  'Press banca horizontal': 'Press de banca',
+  'Tracciones sobre barra fija para dorsales': 'Tracción en barra dorsales',
+  'Extensión de tríceps por encima de la cabeza': 'Pushdown tríceps',
+  'Curl barra Z / curl inclinado con mancuernas': 'Curl bíceps',
+  'Crunches abdominales': 'Crunches',
+  'Hack squat / prensa': 'Hack squat',
+  'Gemelos con barra en hombros': 'Extensión gemelos',
+  'Pushdown de tríceps / extensión de tríceps por encima de la cabeza': 'Pushdown tríceps',
+  'Crunches reversas': 'Crunches',
+  'Remo con cable para dorsales': 'Remo dorsales',
+  'Dips de tríceps': 'Tríceps dips',
+  'Abdominales laterales': 'Crunches'
 }
 const PROG_DEFAULT = {setsTarget:3,repsMin:8,repsMax:12,loadIncrement:2.5,rirTarget:2}
 const getProgConfig = (name, userConfig) => ({...PROG_DEFAULT,...(PROGRESSION_DEFAULTS[name]||{}),...(userConfig[name]||{})})
@@ -604,6 +620,71 @@ function VolumeView({ sessions }) {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function generatePlanFile(plan, format) {
+  if (format === 'json') return JSON.stringify(plan, null, 2)
+  const lines = [`# ${plan.title}`, '', plan.description, '']
+  for (const day of plan.days) {
+    lines.push(`## ${day.name}`, '')
+    for (const ex of day.exercises) {
+      const alias = ex.alias || ex.name
+      const cfg = getProgConfig(alias, {})
+      lines.push(`- ${ex.name} — ${cfg.setsTarget}x${cfg.repsMin}-${cfg.repsMax} · RIR≥${cfg.rirTarget}`)
+    }
+    lines.push('')
+  }
+  return lines.join('\n')
+}
+
+function downloadPlanFile(plan, format) {
+  const content = generatePlanFile(plan, format)
+  const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/markdown' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `iron-log-plan.${format === 'json' ? 'json' : 'md'}`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function PlanView({ plan, progConfig }) {
+  return (
+    <div style={{padding:12}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,flexWrap:'wrap',gap:10}}>
+        <div>
+          <div style={{fontSize:14,letterSpacing:2,fontWeight:900,color:'#ff8c00'}}>📅 {plan.title}</div>
+          <div style={{fontSize:11,color:'#aaa',marginTop:6,lineHeight:1.6,maxWidth:420}}>{plan.description} Las series y repeticiones usan la misma filosofía de Iron Log.</div>
+        </div>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          <button onClick={() => downloadPlanFile(plan, 'json')} style={{padding:'10px 14px',background:'#0d0d0d',border:'1.5px solid #222',borderRadius:6,color:'#ff8c00',fontSize:11,fontWeight:900,cursor:'pointer'}}>DESCARGAR JSON</button>
+          <button onClick={() => downloadPlanFile(plan, 'md')} style={{padding:'10px 14px',background:'#ff8c00',border:'none',borderRadius:6,color:'#080808',fontSize:11,fontWeight:900,cursor:'pointer'}}>DESCARGAR MD</button>
+        </div>
+      </div>
+      {plan.days.map((day,di)=>(
+        <div key={day.name} style={{marginBottom:18,background:'#0f0f0f',border:'1px solid #1a1a1a',borderRadius:10,padding:'14px'}}>
+          <div style={{fontSize:12,letterSpacing:2,color:'#ff8c00',fontWeight:900,marginBottom:10}}>{day.name}</div>
+          <div style={{display:'grid',gap:10}}>
+            {day.exercises.map((ex,ei)=>{
+              const alias = ex.alias || ex.name
+              const cfg = getProgConfig(alias, progConfig)
+              return (
+                <div key={`${ei}-${ex.name}`} style={{background:'#101010',border:'1px solid #181818',borderRadius:8,padding:'12px'}}>
+                  <div style={{fontSize:13,fontWeight:900,color:'#f0ece3',marginBottom:6}}>{ex.name}</div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:8,alignItems:'center'}}>
+                    <div style={{fontSize:11,color:'#aaa',background:'#111',border:'1px solid #222',borderRadius:5,padding:'6px 8px'}}>Series: {cfg.setsTarget}</div>
+                    <div style={{fontSize:11,color:'#aaa',background:'#111',border:'1px solid #222',borderRadius:5,padding:'6px 8px'}}>Reps: {cfg.repsMin}-{cfg.repsMax}</div>
+                    <div style={{fontSize:11,color:'#aaa',background:'#111',border:'1px solid #222',borderRadius:5,padding:'6px 8px'}}>RIR≥{cfg.rirTarget}</div>
+                  </div>
+                  {alias !== ex.name && <div style={{fontSize:10,color:'#777',marginTop:6}}>Equivalente: {alias}</div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -1229,7 +1310,7 @@ export default function App() {
           </div>
         </div>
         <div style={{display:'flex',gap:5}}>
-          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['progress','📈 PROGRESO'],['body','📏 MEDIDAS'],['history','🗂 HISTORIAL']].map(([v,l])=>(
+          {[['log','📋 SESIÓN'],['volume','📊 VOLUMEN'],['plan','📅 PLAN'],['progress','📈 PROGRESO'],['body','📏 MEDIDAS'],['history','🗂 HISTORIAL']].map(([v,l])=>(
             <button key={v} onClick={()=>setView(v)} style={{flex:1,padding:'8px 2px',background:view===v?'#ff8c00':'transparent',color:view===v?'#080808':'#555',border:`1.5px solid ${view===v?'#ff8c00':'#222'}`,borderRadius:5,fontSize:9,fontWeight:800,letterSpacing:0.5,cursor:'pointer',fontFamily:'inherit'}}>{l}</button>
           ))}
         </div>
@@ -1341,6 +1422,8 @@ export default function App() {
       )}
 
       {view==='volume'&&<VolumeView sessions={sessions}/>}
+
+      {view==='plan'&&<PlanView plan={workoutPlan} progConfig={progConfig} />}
 
       {view==='history'&&(
         <div style={{padding:12}}>
